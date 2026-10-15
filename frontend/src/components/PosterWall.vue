@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   listCategories,
   listMedia,
@@ -32,7 +32,13 @@ async function load() {
   }
 }
 
+// 回到頁面時更新
+function onVisible() {
+  if (!document.hidden) load()
+}
+
 onMounted(async () => {
+  document.addEventListener('visibilitychange', onVisible)
   try {
     categories.value = await listCategories()
   } catch {
@@ -40,6 +46,8 @@ onMounted(async () => {
   }
   await load()
 })
+
+onUnmounted(() => document.removeEventListener('visibilitychange', onVisible))
 
 watch([query, sort], () => {
   window.clearTimeout(timer)

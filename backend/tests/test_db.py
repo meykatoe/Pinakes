@@ -30,3 +30,17 @@ def test_wal_enabled(client):
     with db.get_engine().connect() as conn:
         mode = conn.exec_driver_sql("PRAGMA journal_mode").scalar()
     assert mode == "wal"
+
+
+def test_prune_cache(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import TmdbCache
+
+    with Session(db.get_engine()) as s:
+        s.add(TmdbCache(key="old", payload="{}", fetched_at=datetime.now(UTC) - timedelta(days=60)))
+        s.add(TmdbCache(key="new", payload="{}"))
+        s.commit()
+        db.prune_cache(s)
+        assert s.get(TmdbCache, "old") is None
+        assert s.get(TmdbCache, "new") is not None

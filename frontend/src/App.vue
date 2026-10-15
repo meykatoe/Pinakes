@@ -66,7 +66,7 @@ const tab = computed(() =>
           <rect x="9.5" y="4" width="5" height="16" rx="1" />
           <rect x="16" y="4" width="5" height="16" rx="1" transform="rotate(8 18.5 12)" />
         </svg>
-        Pinakes
+        <span class="brand-name">Pinakes</span>
       </a>
       <nav>
         <a
@@ -155,6 +155,7 @@ nav {
 
 nav a {
   padding: 0.4rem 0.85rem;
+  white-space: nowrap;
   border-radius: var(--radius-sm);
   color: var(--muted);
   text-decoration: none;
@@ -201,6 +202,12 @@ nav a.active {
 
   .page {
     padding: 1rem;
+  }
+}
+
+@media (max-width: 26rem) {
+  .brand-name {
+    display: none;
   }
 }
 </style>

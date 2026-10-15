@@ -1,11 +1,12 @@
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
 from sqlalchemy import DateTime, Engine, event, inspect, text
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, col, create_engine, delete
 
 from app.config import settings
+from app.models import TmdbCache
 from app.services.categories import seed_categories
 from app.services.player import seed_players
 
@@ -74,6 +75,13 @@ def init_db() -> None:
     with Session(engine) as session:
         seed_categories(session)
         seed_players(session)
+        prune_cache(session)
+
+
+def prune_cache(session: Session, days: int = 30) -> None:
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    session.exec(delete(TmdbCache).where(col(TmdbCache.fetched_at) < cutoff))
+    session.commit()
 
 
 def get_session() -> Iterator[Session]:
