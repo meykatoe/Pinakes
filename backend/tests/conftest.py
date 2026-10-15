@@ -9,6 +9,7 @@ from app.main import app
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "watch_loop", False)
     db.get_engine.cache_clear()
     security._fernet.cache_clear()
     with TestClient(app) as c:

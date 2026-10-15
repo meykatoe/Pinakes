@@ -4,16 +4,19 @@ import {
   chooseItem,
   executeAll,
   executeItem,
+  getWatchStatus,
   listItems,
   scan,
   skipItem,
   undoItem,
   type Item,
+  type WatchStatus,
 } from '../api'
 
 const items = ref<Item[]>([])
 const message = ref('')
 const busy = ref(false)
+const watch = ref<WatchStatus | null>(null)
 
 const statusText: Record<string, string> = {
   pending_review: '待確認',
@@ -24,7 +27,10 @@ const statusText: Record<string, string> = {
   undone: '已還原',
 }
 
-const reload = async () => (items.value = await listItems())
+async function reload() {
+  items.value = await listItems()
+  watch.value = await getWatchStatus()
+}
 
 async function run(action: () => Promise<string | void>) {
   busy.value = true
@@ -63,6 +69,11 @@ const act = (fn: () => Promise<unknown>) => run(async () => void (await fn()))
       <button :disabled="busy" @click="doExecuteAll">執行全部待執行項目</button>
       <span>{{ message }}</span>
     </div>
+
+    <p v-if="watch">
+      監控：{{ watch.enabled ? '已啟用' : '未啟用' }}，等待穩定 {{ watch.waiting }} 個檔案
+      <span v-if="watch.last_error" class="warn">（{{ watch.last_error }}）</span>
+    </p>
 
     <table>
       <thead>

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.db import get_session
-from app.services import matcher, naming, pipeline, settings_store
+from app.services import clients, matcher, naming, pipeline, settings_store
 from app.services.ai import AiClient
 from app.services.tmdb import TmdbClient, TmdbError
 
@@ -12,30 +12,13 @@ router = APIRouter()
 
 def tmdb_client(session: Session = Depends(get_session)) -> TmdbClient:
     try:
-        return TmdbClient(
-            settings_store.get_value(session, "tmdb_api_key"),
-            settings_store.get_value(session, "tmdb_language"),
-            session,
-        )
+        return clients.build_tmdb(session)
     except TmdbError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 def ai_client(session: Session = Depends(get_session)) -> AiClient | None:
-    key = settings_store.get_value(session, "openai_api_key")
-    if not key or settings_store.get_value(session, "ai_enabled") != "true":
-        return None
-    try:
-        limit = int(settings_store.get_value(session, "ai_daily_limit"))
-    except ValueError:
-        limit = 200
-    return AiClient(
-        key,
-        settings_store.get_value(session, "openai_base_url"),
-        settings_store.get_value(session, "openai_model"),
-        session,
-        limit,
-    )
+    return clients.build_ai(session)
 
 
 class MatchIn(BaseModel):

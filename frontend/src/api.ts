@@ -7,6 +7,10 @@ export interface Settings {
   ai_enabled: boolean
   ai_daily_limit: number
   ai_auto_apply: boolean
+  watch_enabled: boolean
+  watch_interval: number
+  stable_seconds: number
+  auto_execute: boolean
   organize_mode: string
   conflict_policy: string
 }
@@ -200,3 +204,14 @@ export const chooseItem = (id: number, tmdbId?: number, categoryId?: number) =>
     tmdb_id: tmdbId,
     category_id: categoryId,
   })
+
+export interface WatchStatus {
+  enabled: boolean
+  running: boolean
+  last_run: number | null
+  last_error: string
+  waiting: number
+  last_processed: { id: number; source: string; status: string }[]
+}
+
+export const getWatchStatus = () => send<WatchStatus>('/api/watch/status', 'GET')

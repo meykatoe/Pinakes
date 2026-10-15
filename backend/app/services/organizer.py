@@ -61,6 +61,37 @@ def is_known(session: Session, path: Path) -> bool:
     return session.exec(stmt).first() is not None
 
 
+def new_paths(session: Session, inbox: Path) -> list[Path]:
+    return [p for p in find_videos(inbox) if not is_known(session, p)]
+
+
+async def plan_paths(
+    session: Session,
+    client: TmdbClient,
+    ai,
+    inbox: Path,
+    library: Path,
+    paths: list[Path],
+) -> list[MediaItem]:
+    items = []
+    for path in paths:
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        item = MediaItem(
+            source_path=str(path), size=stat.st_size, mtime=int(stat.st_mtime)
+        )
+        try:
+            await plan_item(session, client, ai, item, inbox, library)
+        except (OrganizeError, ValueError) as exc:
+            item.status, item.error = "failed", str(exc)
+            session.add(item)
+            session.commit()
+        items.append(item)
+    return items
+
+
 def pick_category(session: Session, item: MediaItem) -> Category:
     if item.category_id:
         if cat := session.get(Category, item.category_id):

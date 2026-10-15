@@ -17,6 +17,10 @@ const form = reactive({
   ai_enabled: true,
   ai_daily_limit: 200,
   ai_auto_apply: true,
+  watch_enabled: false,
+  watch_interval: 30,
+  stable_seconds: 60,
+  auto_execute: true,
   organize_mode: 'hardlink',
   conflict_policy: 'skip',
 })
@@ -31,6 +35,10 @@ function fill(data: Settings) {
   form.ai_enabled = data.ai_enabled
   form.ai_daily_limit = data.ai_daily_limit
   form.ai_auto_apply = data.ai_auto_apply
+  form.watch_enabled = data.watch_enabled
+  form.watch_interval = data.watch_interval
+  form.stable_seconds = data.stable_seconds
+  form.auto_execute = data.auto_execute
   form.organize_mode = data.organize_mode
   form.conflict_policy = data.conflict_policy
   form.tmdb_api_key = ''
@@ -131,6 +139,26 @@ async function test(target: 'tmdb' | 'openai') {
           <option value="keep_larger">保留較大的檔案</option>
           <option value="overwrite">覆蓋（舊檔會備份）</option>
         </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>自動監控</legend>
+      <label class="check">
+        <input v-model="form.watch_enabled" type="checkbox" />
+        啟用待整理目錄監控
+      </label>
+      <label class="check">
+        <input v-model="form.auto_execute" type="checkbox" />
+        辨識確定後自動執行（取消則只產生計畫）
+      </label>
+      <label>
+        掃描間隔（秒，最少 5）
+        <input v-model.number="form.watch_interval" type="number" min="5" />
+      </label>
+      <label>
+        檔案穩定時間（秒，大小與修改時間不變多久才處理）
+        <input v-model.number="form.stable_seconds" type="number" min="0" />
       </label>
     </fieldset>
 

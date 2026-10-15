@@ -19,6 +19,10 @@ class SettingsOut(BaseModel):
     ai_enabled: bool
     ai_daily_limit: int
     ai_auto_apply: bool
+    watch_enabled: bool
+    watch_interval: int
+    stable_seconds: int
+    auto_execute: bool
     organize_mode: str
     conflict_policy: str
 
@@ -33,6 +37,10 @@ class SettingsIn(BaseModel):
     ai_enabled: bool | None = None
     ai_daily_limit: int | None = Field(default=None, ge=0)
     ai_auto_apply: bool | None = None
+    watch_enabled: bool | None = None
+    watch_interval: int | None = Field(default=None, ge=5)
+    stable_seconds: int | None = Field(default=None, ge=0)
+    auto_execute: bool | None = None
     organize_mode: Literal["hardlink", "move", "copy", "symlink"] | None = None
     conflict_policy: Literal["skip", "overwrite", "keep_larger"] | None = None
 
@@ -54,11 +62,17 @@ def _build_out(session: Session) -> SettingsOut:
     for key in settings_store.SECRET_KEYS:
         data[key] = _mask(data[key])
     data["ai_enabled"] = data["ai_enabled"] == "true"
-    data["ai_auto_apply"] = data["ai_auto_apply"] == "true"
-    try:
-        data["ai_daily_limit"] = int(data["ai_daily_limit"])
-    except ValueError:
-        data["ai_daily_limit"] = 200
+    for key in ("ai_auto_apply", "watch_enabled", "auto_execute"):
+        data[key] = data[key] == "true"
+    for key, fallback in (
+        ("ai_daily_limit", 200),
+        ("watch_interval", 30),
+        ("stable_seconds", 60),
+    ):
+        try:
+            data[key] = int(data[key])
+        except ValueError:
+            data[key] = fallback
     return SettingsOut(**data)
 
 

@@ -8,6 +8,8 @@ class Settings(BaseSettings):
 
     # 資料目錄
     data_dir: Path = Path("data")
+    # 背景監控
+    watch_loop: bool = True
     # 前端來源
     cors_origins: list[str] = ["http://localhost:5173"]
 

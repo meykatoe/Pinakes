@@ -91,26 +91,16 @@ async def scan(
     ai: AiClient | None = Depends(ai_client),
 ) -> ScanOut:
     inbox, library = _roots(session)
-    out = ScanOut(created=0, planned=0, pending_review=0)
-    for path in organizer.find_videos(inbox):
-        if organizer.is_known(session, path):
-            continue
-        stat = path.stat()
-        item = MediaItem(
-            source_path=str(path), size=stat.st_size, mtime=int(stat.st_mtime)
-        )
-        try:
-            await organizer.plan_item(session, client, ai, item, inbox, library)
-        except TmdbError as exc:
-            raise HTTPException(502, str(exc)) from exc
-        except (organizer.OrganizeError, ValueError) as exc:
-            item.status, item.error = "failed", str(exc)
-            session.add(item)
-            session.commit()
-        out.created += 1
-        out.planned += item.status == "planned"
-        out.pending_review += item.status == "pending_review"
-    return out
+    paths = organizer.new_paths(session, inbox)
+    try:
+        items = await organizer.plan_paths(session, client, ai, inbox, library, paths)
+    except TmdbError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return ScanOut(
+        created=len(items),
+        planned=sum(i.status == "planned" for i in items),
+        pending_review=sum(i.status == "pending_review" for i in items),
+    )
 
 
 @router.post("/items/{item_id}/choose")
