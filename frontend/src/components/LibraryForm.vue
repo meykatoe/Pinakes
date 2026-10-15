@@ -11,39 +11,52 @@ import {
   type CategoryInput,
   type Paths,
 } from '../api'
+import { confirm } from '../ui/confirm'
+import { toast, toastError } from '../ui/toast'
 
 const paths = reactive({ inbox_path: '', library_path: '' })
-const sameDevice = ref<boolean | null>(null)
+const saved = ref<Paths | null>(null)
 const categories = ref<Category[]>([])
+const original = ref<Record<number, string>>({})
 const draft = reactive<CategoryInput>({ name: '', media_type: 'movie', subdir: '' })
-const message = ref('')
+const savingPaths = ref(false)
 
 function applyPaths(data: Paths) {
+  saved.value = data
   paths.inbox_path = data.inbox_path
   paths.library_path = data.library_path
-  sameDevice.value = data.same_device
 }
 
-async function run(action: () => Promise<void>, ok = '') {
-  try {
-    await action()
-    message.value = ok
-  } catch (err) {
-    message.value = (err as Error).message
-  }
-}
+const snap = (c: Category) => JSON.stringify([c.name, c.media_type, c.subdir])
 
 async function reload() {
   categories.value = await listCategories()
+  original.value = Object.fromEntries(categories.value.map((c) => [c.id, snap(c)]))
 }
 
 onMounted(async () => {
-  applyPaths(await getPaths())
-  await reload()
+  try {
+    applyPaths(await getPaths())
+    await reload()
+  } catch (err) {
+    toastError(err)
+  }
 })
 
-const submitPaths = () =>
-  run(async () => applyPaths(await savePaths({ ...paths })), '路徑已儲存')
+async function run(action: () => Promise<void>, ok: string) {
+  try {
+    await action()
+    toast(ok)
+  } catch (err) {
+    toastError(err)
+  }
+}
+
+async function submitPaths() {
+  savingPaths.value = true
+  await run(async () => applyPaths(await savePaths({ ...paths })), '目錄已儲存')
+  savingPaths.value = false
+}
 
 const add = () =>
   run(async () => {
@@ -59,107 +72,128 @@ const save = (c: Category) =>
     await reload()
   }, '分類已更新')
 
-const remove = (c: Category) =>
-  run(async () => {
+async function remove(c: Category) {
+  if (!(await confirm(`刪除分類「${c.name}」？已整理的檔案不會被移動。`, '刪除', true))) return
+  await run(async () => {
     await deleteCategory(c.id)
     await reload()
   }, '分類已刪除')
+}
 </script>
 
 <template>
-  <section class="library">
-    <h2>媒體庫</h2>
-
-    <form @submit.prevent="submitPaths">
-      <label>
-        待整理目錄
-        <input v-model="paths.inbox_path" placeholder="/mnt/d/downloads" />
+  <section class="card">
+    <div class="card-head"><h2>媒體庫目錄</h2></div>
+    <form class="form-grid" @submit.prevent="submitPaths">
+      <label class="field">
+        <span>待整理目錄</span>
+        <input v-model="paths.inbox_path" class="input mono" placeholder="/downloads" />
+        <p class="hint">下載完成的檔案所在，Pinakes 只會讀取這裡</p>
       </label>
-      <label>
-        已整理目錄
-        <input v-model="paths.library_path" placeholder="/mnt/d/media" />
+      <label class="field">
+        <span>已整理目錄</span>
+        <input v-model="paths.library_path" class="input mono" placeholder="/media" />
+        <p class="hint">整理後的檔案會依分類放到這裡</p>
       </label>
-      <p v-if="sameDevice === false" class="warn">
-        兩個目錄不在同一磁碟，無法使用硬連結。
+      <p v-if="saved?.same_device === false" class="notice full">
+        兩個目錄不在同一磁碟，無法使用硬連結，請改用移動或複製模式。
       </p>
-      <button type="submit">儲存路徑</button>
+      <div class="full row">
+        <button
+          type="submit"
+          class="btn primary"
+          :disabled="savingPaths ||
+            (paths.inbox_path === saved?.inbox_path && paths.library_path === saved?.library_path)"
+        >
+          儲存目錄
+        </button>
+      </div>
     </form>
+  </section>
 
-    <h3>分類</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>名稱</th>
-          <th>類型</th>
-          <th>子目錄</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="c in categories" :key="c.id">
-          <td><input v-model="c.name" /></td>
-          <td>
-            <select v-model="c.media_type" :disabled="c.builtin">
-              <option value="movie">電影</option>
-              <option value="tv">影集</option>
-            </select>
-          </td>
-          <td><input v-model="c.subdir" /></td>
-          <td>
-            <button type="button" @click="save(c)">更新</button>
-            <button type="button" :disabled="c.builtin" @click="remove(c)">
-              刪除
-            </button>
-          </td>
-        </tr>
-        <tr>
-          <td><input v-model="draft.name" placeholder="新分類" /></td>
-          <td>
-            <select v-model="draft.media_type">
-              <option value="movie">電影</option>
-              <option value="tv">影集</option>
-            </select>
-          </td>
-          <td><input v-model="draft.subdir" placeholder="子目錄" /></td>
-          <td><button type="button" @click="add">新增</button></td>
-        </tr>
-      </tbody>
-    </table>
-
-    <p>{{ message }}</p>
+  <section class="card">
+    <div class="card-head"><h2>分類</h2></div>
+    <p class="hint intro">每個分類對應已整理目錄下的一個子目錄，海報牆也會依分類分列。</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>名稱</th>
+            <th>類型</th>
+            <th>子目錄</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="c in categories" :key="c.id">
+            <td><input v-model="c.name" class="input" /></td>
+            <td>
+              <select v-model="c.media_type" class="input" :disabled="c.builtin">
+                <option value="movie">電影</option>
+                <option value="tv">影集</option>
+              </select>
+            </td>
+            <td><input v-model="c.subdir" class="input mono" /></td>
+            <td class="actions">
+              <button
+                type="button"
+                class="btn sm"
+                :disabled="snap(c) === original[c.id]"
+                @click="save(c)"
+              >
+                儲存
+              </button>
+              <button
+                type="button"
+                class="btn sm danger"
+                :disabled="c.builtin"
+                :title="c.builtin ? '內建分類不可刪除' : ''"
+                @click="remove(c)"
+              >
+                刪除
+              </button>
+            </td>
+          </tr>
+          <tr class="new">
+            <td><input v-model="draft.name" class="input" placeholder="例如：動畫" /></td>
+            <td>
+              <select v-model="draft.media_type" class="input">
+                <option value="movie">電影</option>
+                <option value="tv">影集</option>
+              </select>
+            </td>
+            <td><input v-model="draft.subdir" class="input mono" placeholder="子目錄" /></td>
+            <td class="actions">
+              <button
+                type="button"
+                class="btn sm primary"
+                :disabled="!draft.name.trim() || !draft.subdir.trim()"
+                @click="add"
+              >
+                新增
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.library {
-  max-width: 48rem;
-  margin-top: 2rem;
+.card {
+  margin-bottom: 1rem;
 }
 
-form {
-  display: grid;
-  gap: 0.75rem;
-  max-width: 32rem;
+.card + .card {
+  margin-top: 0;
 }
 
-label {
-  display: grid;
-  gap: 0.25rem;
+.intro {
+  margin: -0.5rem 0 0.75rem;
 }
 
-.warn {
-  color: #b45309;
-  margin: 0;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 0.25rem;
+td:nth-child(2) {
+  width: 7rem;
 }
 </style>

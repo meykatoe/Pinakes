@@ -3,34 +3,48 @@ import { onMounted, reactive, ref } from 'vue'
 import {
   createPlayer,
   deletePlayer,
+  getTranscodeStatus,
   listPlayers,
   regenerateToken,
   updatePlayer,
   type Player,
   type PlayerInput,
 } from '../api'
+import { confirm } from '../ui/confirm'
+import { toast, toastError } from '../ui/toast'
 
 const players = ref<Player[]>([])
+const original = ref<Record<number, string>>({})
+const ffmpeg = ref<{ available: boolean; ffmpeg: string | null } | null>(null)
 const draft = reactive<PlayerInput>({
   name: '',
   kind: 'link',
   template: '',
   enabled: true,
 })
-const message = ref('')
 
-const reload = async () => (players.value = await listPlayers())
+const snap = (p: Player) => JSON.stringify([p.name, p.kind, p.template, p.enabled])
+
+async function reload() {
+  players.value = await listPlayers()
+  original.value = Object.fromEntries(players.value.map((p) => [p.id, snap(p)]))
+}
 
 async function run(action: () => Promise<void>, ok: string) {
   try {
     await action()
-    message.value = ok
+    toast(ok)
   } catch (err) {
-    message.value = (err as Error).message
+    toastError(err)
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload().catch(toastError)
+  getTranscodeStatus()
+    .then((r) => (ffmpeg.value = r))
+    .catch(() => undefined)
+})
 
 const add = () =>
   run(async () => {
@@ -46,99 +60,144 @@ const save = (p: Player) =>
     await reload()
   }, '播放器已更新')
 
-const remove = (p: Player) =>
-  run(async () => {
+async function remove(p: Player) {
+  if (!(await confirm(`刪除播放器「${p.name}」？`, '刪除', true))) return
+  await run(async () => {
     await deletePlayer(p.id)
     await reload()
   }, '播放器已刪除')
+}
 
-const renewToken = () =>
-  run(async () => {
-    await regenerateToken()
-  }, '已重新產生權杖，舊的串流連結會失效')
+async function renewToken() {
+  const ok = await confirm('重新產生後，先前複製或下載的串流連結都會失效。', '重新產生', true)
+  if (!ok) return
+  await run(async () => void (await regenerateToken()), '已重新產生串流權杖')
+}
 </script>
 
 <template>
-  <section class="players">
-    <h2>外部播放器</h2>
-    <small>
-      樣板可用 {url}（串流網址）、{url_encoded}（編碼後的串流網址）、{filename}。
-      PotPlayer 安裝後已註冊 potplayer://；VLC 需另外安裝協定註冊工具才會有 vlc://。
-    </small>
-    <table>
-      <thead>
-        <tr>
-          <th>名稱</th>
-          <th>類型</th>
-          <th>連結樣板</th>
-          <th>啟用</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="p in players" :key="p.id">
-          <td><input v-model="p.name" /></td>
-          <td>
-            <select v-model="p.kind">
-              <option value="link">協定連結</option>
-              <option value="m3u">m3u 清單</option>
-            </select>
-          </td>
-          <td>
-            <input v-model="p.template" class="wide" :disabled="p.kind === 'm3u'" />
-          </td>
-          <td><input v-model="p.enabled" type="checkbox" /></td>
-          <td>
-            <button type="button" @click="save(p)">更新</button>
-            <button type="button" @click="remove(p)">刪除</button>
-          </td>
-        </tr>
-        <tr>
-          <td><input v-model="draft.name" placeholder="新播放器" /></td>
-          <td>
-            <select v-model="draft.kind">
-              <option value="link">協定連結</option>
-              <option value="m3u">m3u 清單</option>
-            </select>
-          </td>
-          <td>
-            <input
-              v-model="draft.template"
-              class="wide"
-              placeholder="myplayer://{url_encoded}"
-              :disabled="draft.kind === 'm3u'"
-            />
-          </td>
-          <td><input v-model="draft.enabled" type="checkbox" /></td>
-          <td><button type="button" @click="add">新增</button></td>
-        </tr>
-      </tbody>
-    </table>
-    <p>
-      <button type="button" @click="renewToken">重新產生串流權杖</button>
-      <span>{{ message }}</span>
+  <section class="card">
+    <div class="card-head">
+      <h2>內建播放器</h2>
+      <span v-if="ffmpeg?.available" class="badge ok">可用</span>
+      <span v-else-if="ffmpeg" class="badge danger">找不到 ffmpeg</span>
+    </div>
+    <p class="hint">
+      瀏覽器能直接播放的檔案（H.264 MP4、WebM）會直接串流；其他格式會用 ffmpeg 即時轉封裝或轉碼。
+      <template v-if="ffmpeg?.ffmpeg">目前使用 <code>{{ ffmpeg.ffmpeg }}</code></template>
+      <template v-else-if="ffmpeg">請安裝 ffmpeg 或在上方指定路徑。</template>
     </p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>外部播放器</h2></div>
+    <p class="hint intro">
+      樣板可用 <code>{url}</code>（串流網址）、<code>{url_encoded}</code>（編碼後的網址）、<code>{filename}</code>。
+      PotPlayer 安裝後會註冊 potplayer://；VLC 需額外安裝協定註冊工具；手機可用 m3u 清單。
+    </p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>名稱</th>
+            <th>類型</th>
+            <th>連結樣板</th>
+            <th>啟用</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="p in players" :key="p.id">
+            <td><input v-model="p.name" class="input" /></td>
+            <td>
+              <select v-model="p.kind" class="input">
+                <option value="link">協定連結</option>
+                <option value="m3u">m3u 清單</option>
+              </select>
+            </td>
+            <td class="wide">
+              <input
+                v-model="p.template"
+                class="input mono"
+                :disabled="p.kind === 'm3u'"
+                :placeholder="p.kind === 'm3u' ? '不需要樣板' : ''"
+              />
+            </td>
+            <td><input v-model="p.enabled" type="checkbox" class="toggle" /></td>
+            <td class="actions">
+              <button type="button" class="btn sm" :disabled="snap(p) === original[p.id]" @click="save(p)">
+                儲存
+              </button>
+              <button type="button" class="btn sm danger" @click="remove(p)">刪除</button>
+            </td>
+          </tr>
+          <tr>
+            <td><input v-model="draft.name" class="input" placeholder="新播放器" /></td>
+            <td>
+              <select v-model="draft.kind" class="input">
+                <option value="link">協定連結</option>
+                <option value="m3u">m3u 清單</option>
+              </select>
+            </td>
+            <td class="wide">
+              <input
+                v-model="draft.template"
+                class="input mono"
+                placeholder="myplayer://{url_encoded}"
+                :disabled="draft.kind === 'm3u'"
+              />
+            </td>
+            <td><input v-model="draft.enabled" type="checkbox" class="toggle" /></td>
+            <td class="actions">
+              <button
+                type="button"
+                class="btn sm primary"
+                :disabled="!draft.name.trim() || (draft.kind === 'link' && !draft.template.trim())"
+                @click="add"
+              >
+                新增
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="row token">
+      <button type="button" class="btn sm danger" @click="renewToken">重新產生串流權杖</button>
+      <span class="hint">串流網址帶有權杖，外流時可重新產生讓舊連結失效</span>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.players {
-  max-width: 64rem;
-  margin-top: 2rem;
+.card {
+  margin-bottom: 1rem;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
+.card + .card {
+  margin-top: 0;
 }
 
-th,
-td {
-  text-align: left;
-  padding: 0.25rem;
+.intro {
+  margin: -0.5rem 0 0.75rem;
 }
 
 .wide {
-  width: 100%;
+  min-width: 14rem;
+  width: 45%;
+}
+
+td:nth-child(2) {
+  width: 8rem;
+}
+
+.toggle {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+}
+
+.token {
+  margin-top: 1rem;
 }
 </style>

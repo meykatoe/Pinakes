@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import LibraryForm from './components/LibraryForm.vue'
-import MatchPreview from './components/MatchPreview.vue'
-import PlayersForm from './components/PlayersForm.vue'
+import { computed } from 'vue'
 import OrganizePanel from './components/OrganizePanel.vue'
 import PosterWall from './components/PosterWall.vue'
-import RulesForm from './components/RulesForm.vue'
-import SettingsForm from './components/SettingsForm.vue'
+import SettingsPage from './components/SettingsPage.vue'
+import { go, route } from './router'
+import { theme, toggleTheme } from './ui/theme'
+import UiLayer from './ui/UiLayer.vue'
 
 const tabs = [
   { id: 'wall', label: '海報牆' },
@@ -14,92 +13,145 @@ const tabs = [
   { id: 'settings', label: '設定' },
 ]
 
-function loadTab(): string {
-  try {
-    const saved = localStorage.getItem('pinakes-tab')
-    if (saved && tabs.some((t) => t.id === saved)) return saved
-  } catch {
-    // 無法讀取
-  }
-  return 'wall'
-}
-
-const tab = ref(loadTab())
-
-watch(tab, (value) => {
-  try {
-    localStorage.setItem('pinakes-tab', value)
-  } catch {
-    // 無法寫入
-  }
-})
+const tab = computed(() =>
+  tabs.some((t) => t.id === route.value[0]) ? route.value[0] : 'wall',
+)
 </script>
 
 <template>
   <header class="top">
-    <h1>Pinakes</h1>
+    <a class="brand" href="#/wall">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="4" width="5" height="16" rx="1" />
+        <rect x="9.5" y="4" width="5" height="16" rx="1" />
+        <rect x="16" y="4" width="5" height="16" rx="1" transform="rotate(8 18.5 12)" />
+      </svg>
+      Pinakes
+    </a>
     <nav>
-      <button
+      <a
         v-for="t in tabs"
         :key="t.id"
-        type="button"
+        :href="`#/${t.id}`"
         :aria-current="tab === t.id ? 'page' : undefined"
         :class="{ active: tab === t.id }"
-        @click="tab = t.id"
       >
         {{ t.label }}
-      </button>
+      </a>
     </nav>
+    <span class="spacer"></span>
+    <button
+      type="button"
+      class="btn ghost icon"
+      :title="theme === 'dark' ? '切換為淺色' : '切換為深色'"
+      :aria-label="theme === 'dark' ? '切換為淺色' : '切換為深色'"
+      @click="toggleTheme"
+    >
+      {{ theme === 'dark' ? '☀' : '☾' }}
+    </button>
   </header>
 
   <main class="page">
     <PosterWall v-if="tab === 'wall'" />
     <OrganizePanel v-else-if="tab === 'organize'" />
-    <template v-else>
-      <SettingsForm />
-      <LibraryForm />
-      <PlayersForm />
-      <RulesForm />
-      <MatchPreview />
-    </template>
+    <SettingsPage
+      v-else
+      :section="route[1]"
+      @navigate="(s: string) => go('settings', s)"
+    />
   </main>
 
   <footer class="credit">
     This product uses the TMDB API but is not endorsed or certified by TMDB.
   </footer>
+
+  <UiLayer />
 </template>
 
 <style scoped>
 .top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 2rem;
-  padding: 1rem 2rem;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  gap: 1.5rem;
+  padding: 0.6rem 1.5rem;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
 }
 
-.top h1 {
-  margin: 0;
-  font-size: 1.5rem;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 1.15rem;
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+
+.brand svg {
+  width: 1.4rem;
+  height: 1.4rem;
+  fill: var(--accent);
 }
 
 nav {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
-nav .active {
-  font-weight: 700;
-  text-decoration: underline;
+nav a {
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+nav a:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+nav a.active {
+  color: var(--text);
+  background: var(--surface-2);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .page {
-  padding: 2rem;
+  padding: 1.5rem;
+  max-width: 100rem;
+  margin: 0 auto;
 }
 
 .credit {
-  padding: 1rem 2rem 2rem;
-  font-size: 0.8rem;
-  opacity: 0.6;
+  padding: 1rem 1.5rem 2rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 40rem) {
+  .top {
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .brand {
+    font-size: 1rem;
+  }
+
+  nav a {
+    padding: 0.35rem 0.6rem;
+  }
+
+  .page {
+    padding: 1rem;
+  }
 }
 </style>
