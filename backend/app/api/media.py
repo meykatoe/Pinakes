@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from app.api.match import tmdb_client
 from app.db import get_session
 from app.models import MediaItem, MediaMeta
-from app.services import scraper
+from app.services import organizer, scraper
 from app.services.tmdb import TmdbClient, TmdbError
 
 router = APIRouter()
@@ -171,3 +171,20 @@ def image(media_type: MediaType, tmdb_id: int, kind: Literal["poster", "backdrop
     return FileResponse(
         path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"}
     )
+
+
+@router.delete("/library/media/{media_type}/{tmdb_id}")
+def remove_media(
+    media_type: MediaType, tmdb_id: int, session: Session = Depends(get_session)
+) -> dict[str, int]:
+    items = _grouped(session).get((media_type, tmdb_id))
+    if not items:
+        raise HTTPException(404, "找不到這部作品")
+    removed, failed = 0, 0
+    for item in items:
+        try:
+            organizer.undo_item(session, item)
+            removed += 1
+        except organizer.OrganizeError:
+            failed += 1
+    return {"removed": removed, "failed": failed}

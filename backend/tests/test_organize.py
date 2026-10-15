@@ -298,3 +298,15 @@ def test_summary_and_filter(client, env):
     progress = client.get("/api/organize/scan/progress").json()
     assert progress["running"] is False
     assert progress["done"] == progress["total"] == 2
+
+
+def test_remove_media_undoes_all(client, env):
+    inbox, lib, _ = env
+    make(inbox, MATRIX)
+    client.post("/api/organize/scan")
+    client.post("/api/organize/execute")
+    assert len(client.get("/api/library/media").json()) == 1
+    res = client.delete("/api/library/media/movie/603").json()
+    assert res == {"removed": 1, "failed": 0}
+    assert client.get("/api/library/media").json() == []
+    assert client.delete("/api/library/media/movie/603").status_code == 404

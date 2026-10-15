@@ -6,12 +6,14 @@ import {
   getTranscodeStatus,
   listPlayers,
   refreshMedia,
+  removeMedia,
   type MediaDetail,
   type MediaEntry,
   type Player,
 } from '../api'
 import { basename, pad2 } from '../format'
 import { copyText, formatTime, getProgress } from '../playback'
+import { confirm } from '../ui/confirm'
 import { toast, toastError } from '../ui/toast'
 import VideoPlayer from './VideoPlayer.vue'
 
@@ -176,6 +178,23 @@ async function refresh() {
   }
 }
 
+async function remove() {
+  const ok = await confirm(
+    `將「${props.entry.title}」移出媒體庫？\n整理出的檔案會被移除（移動模式則搬回原處），可在整理頁找到紀錄。`,
+    '移出',
+    true,
+  )
+  if (!ok) return
+  try {
+    const r = await removeMedia(props.entry.media_type, props.entry.tmdb_id)
+    toast(r.failed ? `已移出 ${r.removed} 個，${r.failed} 個失敗` : '已移出媒體庫', r.failed ? 'error' : 'ok')
+    emit('changed')
+    emit('close')
+  } catch (err) {
+    toastError(err)
+  }
+}
+
 const tmdbUrl = computed(
   () => `https://www.themoviedb.org/${props.entry.media_type}/${props.entry.tmdb_id}`,
 )
@@ -289,6 +308,8 @@ const tmdbUrl = computed(
         </ul>
 
         <div class="foot">
+          <button type="button" class="btn ghost sm danger" @click="remove">移出媒體庫</button>
+          <span class="spacer"></span>
           <button type="button" class="btn ghost sm" :disabled="refreshing" @click="refresh">
             <span v-if="refreshing" class="spin"></span>
             重新抓取資料

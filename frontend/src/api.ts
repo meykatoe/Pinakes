@@ -387,3 +387,6 @@ export interface DirListing {
 
 export const listDirs = (path = '') =>
   send<DirListing>(`/api/fs/dirs?path=${encodeURIComponent(path)}`, 'GET')
+
+export const removeMedia = (type: string, id: number) =>
+  send<{ removed: number; failed: number }>(`/api/library/media/${type}/${id}`, 'DELETE')
