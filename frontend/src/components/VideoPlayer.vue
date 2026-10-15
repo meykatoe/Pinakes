@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type Hls from 'hls.js'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { keepAliveHls, startHls, stopHls, type HlsInfo } from '../api'
+import { keepAliveHls, listSubtitles, startHls, stopHls, type HlsInfo } from '../api'
 import { formatTime, getProgress, saveProgress } from '../playback'
 
 const props = defineProps<{ itemId: number; title: string }>()
@@ -14,6 +14,10 @@ const error = ref('')
 const offset = ref(0)
 const now = ref(0)
 const resumed = ref(0)
+const subs = ref<{ index: number; label: string }[]>([])
+const subKey = ref(0)
+const SUB_KEY = 'pinakes-sub'
+const subPref = ref('')
 const modeText: Record<string, string> = {
   direct: '直接播放',
   remux: '轉封裝',
@@ -54,6 +58,7 @@ async function begin(start: number) {
       return
     }
     info.value = data
+    subKey.value++
     if (data.direct_url) {
       offset.value = 0
       el.src = data.direct_url
@@ -152,7 +157,37 @@ function cleanup() {
   teardown()
 }
 
+function showSubs() {
+  const tracks = video.value?.textTracks
+  if (!tracks) return
+  for (const t of Array.from(tracks)) {
+    t.mode = subPref.value && t.label === subPref.value ? 'showing' : 'disabled'
+  }
+}
+
+function onTrackChange() {
+  if (loading.value) return
+  const tracks = video.value?.textTracks
+  if (!tracks) return
+  const on = Array.from(tracks).find((t) => t.mode === 'showing')
+  subPref.value = on?.label ?? ''
+  try {
+    localStorage.setItem(SUB_KEY, subPref.value)
+  } catch {
+    // 無法寫入
+  }
+}
+
 onMounted(() => {
+  try {
+    subPref.value = localStorage.getItem(SUB_KEY) ?? ''
+  } catch {
+    // 無法讀取
+  }
+  listSubtitles(props.itemId)
+    .then((r) => (subs.value = r))
+    .catch(() => undefined)
+  video.value?.textTracks.addEventListener('change', onTrackChange)
   window.addEventListener('keydown', onKey, true)
   window.addEventListener('pagehide', cleanup)
   saveTimer = window.setInterval(persist, 5000)
@@ -187,7 +222,17 @@ onUnmounted(() => {
           @waiting="loading = true"
           @timeupdate="onTime"
           @pause="persist"
-        ></video>
+          @loadedmetadata="showSubs"
+        >
+          <track
+            v-for="t in subs"
+            :key="`${subKey}-${t.index}`"
+            kind="subtitles"
+            :label="t.label"
+            :src="`/api/play/${itemId}/subtitles/${t.index}.vtt?offset=${offset}`"
+            @load="showSubs"
+          />
+        </video>
         <div v-if="loading && !error" class="veil">
           <span class="spin big"></span>
           <span>{{ info && info.mode === 'transcode' ? '轉碼準備中…' : '載入中…' }}</span>

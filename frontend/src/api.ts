@@ -390,3 +390,6 @@ export const listDirs = (path = '') =>
 
 export const removeMedia = (type: string, id: number) =>
   send<{ removed: number; failed: number }>(`/api/library/media/${type}/${id}`, 'DELETE')
+
+export const listSubtitles = (itemId: number) =>
+  send<{ index: number; label: string }[]>(`/api/play/${itemId}/subtitles`, 'GET')
