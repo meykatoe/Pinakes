@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import LibraryForm from './components/LibraryForm.vue'
+import MatchPreview from './components/MatchPreview.vue'
 import RulesForm from './components/RulesForm.vue'
 import SettingsForm from './components/SettingsForm.vue'
 </script>
@@ -10,6 +11,7 @@ import SettingsForm from './components/SettingsForm.vue'
     <SettingsForm />
     <LibraryForm />
     <RulesForm />
+    <MatchPreview />
   </main>
 </template>
 

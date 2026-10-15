@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlmodel import Field, SQLModel
 
 
@@ -24,3 +26,9 @@ class ParseRule(SQLModel, table=True):
     priority: int = 100
     enabled: bool = True
     media_type: str | None = None
+
+
+class TmdbCache(SQLModel, table=True):
+    key: str = Field(primary_key=True)
+    payload: str
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

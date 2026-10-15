@@ -1,5 +1,7 @@
 import httpx
 
+from app.services.tmdb import auth
+
 TMDB_BASE = "https://api.themoviedb.org/3"
 
 
@@ -8,12 +10,7 @@ async def check_tmdb(
 ) -> tuple[bool, str]:
     if not api_key:
         return False, "尚未設定金鑰"
-    headers, params = {}, {}
-    # v4 令牌較長
-    if len(api_key) > 40:
-        headers["Authorization"] = f"Bearer {api_key}"
-    else:
-        params["api_key"] = api_key
+    headers, params = auth(api_key)
     async with httpx.AsyncClient(transport=transport, timeout=10) as client:
         try:
             res = await client.get(

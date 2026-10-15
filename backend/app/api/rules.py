@@ -4,8 +4,7 @@ from sqlmodel import Session, select
 
 from app.db import get_session
 from app.models import ParseRule
-from app.services import naming, rules, settings_store
-from app.services.parser import finalize, parse_path
+from app.services import naming, pipeline, rules, settings_store
 
 router = APIRouter()
 
@@ -117,11 +116,7 @@ def preview(body: PreviewIn, session: Session = Depends(get_session)) -> Preview
     parts = [p for p in body.path.replace("\\", "/").split("/") if p]
     if not parts:
         raise HTTPException(422, "路徑不可為空")
-    parsed = parse_path(parts)
-    stem = parts[-1][: len(parts[-1]) - len(parsed.ext)] if parsed.ext else parts[-1]
-    enabled = [r for r in _ordered(session) if r.enabled]
-    parsed = rules.apply_rules(enabled, stem, parsed)
-    finalize(parsed)
+    parsed = pipeline.parse_file(session, parts)
     key = "tv_template" if parsed.media_type == "tv" else "movie_template"
     template = settings_store.get_value(session, key)
     values = {**parsed.__dict__, "original_title": parsed.title}

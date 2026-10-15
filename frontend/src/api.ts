@@ -119,3 +119,27 @@ export const saveNaming = (body: Naming) =>
 
 export const previewPath = (path: string) =>
   send<Preview>('/api/parse/preview', 'POST', { path })
+
+export interface Candidate {
+  tmdb_id: number
+  media_type: string
+  title: string
+  original_title: string
+  year: number | null
+  overview: string
+  poster_path: string | null
+  popularity: number
+  score: number
+}
+
+export interface MatchResult {
+  parsed: Record<string, string | number | null>
+  candidates: Candidate[]
+  chosen: Candidate | null
+  confident: boolean
+  target: string | null
+  error: string | null
+}
+
+export const previewMatch = (path: string, tmdbId?: number) =>
+  send<MatchResult>('/api/match/preview', 'POST', { path, tmdb_id: tmdbId })
