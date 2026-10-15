@@ -1,5 +1,5 @@
 [project]
-name = "pinakes"
+name = "Pinakes"
 version = "0.1.0"
 description = "媒體整理與海報牆"
 requires-python = ">=3.14"
