@@ -1,5 +1,7 @@
 import re
+from dataclasses import dataclass, replace
 from difflib import SequenceMatcher
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -8,6 +10,10 @@ from app.services.tmdb import TmdbClient, TmdbError
 
 CONFIDENT_SCORE = 0.9
 CONFIDENT_MARGIN = 0.1
+AI_MIN_CONFIDENCE = 0.7
+
+if TYPE_CHECKING:
+    from app.services.ai import AiClient
 
 
 class Candidate(BaseModel):
@@ -106,3 +112,46 @@ async def build_values(
         except TmdbError:
             pass
     return values
+
+
+@dataclass
+class Resolution:
+    candidates: list[Candidate]
+    chosen: Candidate | None = None
+    method: str | None = None
+    reason: str = ""
+
+
+async def resolve(
+    client: TmdbClient,
+    ai: "AiClient | None",
+    parsed: ParsedMedia,
+    filename: str,
+) -> Resolution:
+    from app.services.ai import AiError
+
+    cands = await find_candidates(client, parsed)
+    chosen = decide(cands)
+    if chosen is not None:
+        return Resolution(cands, chosen, "rule")
+    res = Resolution(cands)
+    if ai is None:
+        return res
+    try:
+        if not cands:
+            rewrite = await ai.rewrite(filename)
+            if rewrite.title:
+                alt = replace(parsed, title=rewrite.title, year=rewrite.year or parsed.year)
+                cands = await find_candidates(client, alt)
+                res.candidates = cands
+                if chosen := decide(cands):
+                    return Resolution(cands, chosen, "ai", "AI 改寫搜尋字串後比對")
+        if cands:
+            choice = await ai.choose(filename, parsed, cands)
+            picked = next((c for c in cands if c.tmdb_id == choice.tmdb_id), None)
+            if picked and choice.confidence >= AI_MIN_CONFIDENCE:
+                return Resolution(cands, picked, "ai", choice.reason)
+            res.reason = choice.reason or "AI 無法確定"
+    except AiError as exc:
+        res.reason = f"AI 無法使用：{exc}"
+    return res

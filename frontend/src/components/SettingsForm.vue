@@ -14,6 +14,8 @@ const form = reactive({
   openai_base_url: '',
   openai_model: '',
   tmdb_language: '',
+  ai_enabled: true,
+  ai_daily_limit: 200,
 })
 const results = reactive<Record<string, string>>({})
 const message = ref('')
@@ -23,6 +25,8 @@ function fill(data: Settings) {
   form.openai_base_url = data.openai_base_url
   form.openai_model = data.openai_model
   form.tmdb_language = data.tmdb_language
+  form.ai_enabled = data.ai_enabled
+  form.ai_daily_limit = data.ai_daily_limit
   form.tmdb_api_key = ''
   form.openai_api_key = ''
 }
@@ -87,6 +91,14 @@ async function test(target: 'tmdb' | 'openai') {
         模型
         <input v-model="form.openai_model" />
       </label>
+      <label class="check">
+        <input v-model="form.ai_enabled" type="checkbox" />
+        啟用 AI 輔助辨識
+      </label>
+      <label>
+        每日呼叫上限
+        <input v-model.number="form.ai_daily_limit" type="number" min="0" />
+      </label>
       <button type="button" @click="test('openai')">測試連線</button>
       <span>{{ results.openai }}</span>
     </fieldset>
@@ -110,5 +122,11 @@ fieldset {
 label {
   display: grid;
   gap: 0.25rem;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 </style>

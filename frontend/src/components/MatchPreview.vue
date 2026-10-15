@@ -5,6 +5,11 @@ import { previewMatch, type MatchResult } from '../api'
 const path = ref('')
 const result = ref<MatchResult | null>(null)
 const message = ref('')
+const methodText: Record<string, string> = {
+  rule: '規則比對',
+  ai: 'AI 判斷',
+  manual: '手動指定',
+}
 
 async function run(tmdbId?: number) {
   try {
@@ -27,9 +32,10 @@ async function run(tmdbId?: number) {
 
     <div v-if="result">
       <p v-if="result.target">
-        {{ result.confident ? '已確定' : '已選擇' }}：{{ result.target }}
+        {{ methodText[result.method ?? ''] }}：{{ result.target }}
       </p>
       <p v-else class="warn">無法確定，需要人工確認</p>
+      <p v-if="result.reason">{{ result.reason }}</p>
       <p v-if="result.error" class="warn">{{ result.error }}</p>
 
       <table v-if="result.candidates.length">

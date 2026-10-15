@@ -32,3 +32,14 @@ class TmdbCache(SQLModel, table=True):
     key: str = Field(primary_key=True)
     payload: str
     fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class AiCache(SQLModel, table=True):
+    key: str = Field(primary_key=True)
+    payload: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class AiUsage(SQLModel, table=True):
+    day: str = Field(primary_key=True)
+    calls: int = 0

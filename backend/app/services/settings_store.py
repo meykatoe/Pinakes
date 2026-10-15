@@ -11,6 +11,8 @@ DEFAULTS = {
     "openai_base_url": "https://api.openai.com/v1",
     "openai_model": "gpt-4o-mini",
     "tmdb_language": "zh-TW",
+    "ai_enabled": "true",
+    "ai_daily_limit": "200",
     "movie_template": "{title} ({year})/{title} ({year})",
     "tv_template": "{title} ({year})/Season {season:02}/{title} - S{season:02}E{episode:02}",
     "inbox_path": "",

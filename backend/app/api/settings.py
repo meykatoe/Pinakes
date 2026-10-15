@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from app.db import get_session
@@ -16,6 +16,8 @@ class SettingsOut(BaseModel):
     openai_base_url: str
     openai_model: str
     tmdb_language: str
+    ai_enabled: bool
+    ai_daily_limit: int
 
 
 class SettingsIn(BaseModel):
@@ -25,6 +27,8 @@ class SettingsIn(BaseModel):
     openai_base_url: str | None = None
     openai_model: str | None = None
     tmdb_language: str | None = None
+    ai_enabled: bool | None = None
+    ai_daily_limit: int | None = Field(default=None, ge=0)
 
 
 class TestResult(BaseModel):
@@ -43,6 +47,11 @@ def _build_out(session: Session) -> SettingsOut:
     data = {k: all_data[k] for k in SettingsOut.model_fields}
     for key in settings_store.SECRET_KEYS:
         data[key] = _mask(data[key])
+    data["ai_enabled"] = data["ai_enabled"] == "true"
+    try:
+        data["ai_daily_limit"] = int(data["ai_daily_limit"])
+    except ValueError:
+        data["ai_daily_limit"] = 200
     return SettingsOut(**data)
 
 
@@ -56,7 +65,9 @@ def update_settings(
     body: SettingsIn, session: Session = Depends(get_session)
 ) -> SettingsOut:
     for key, value in body.model_dump(exclude_none=True).items():
-        settings_store.set_value(session, key, value.strip())
+        if isinstance(value, bool):
+            value = "true" if value else "false"
+        settings_store.set_value(session, key, str(value).strip())
     return _build_out(session)
 
 

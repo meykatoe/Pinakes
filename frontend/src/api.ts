@@ -4,6 +4,8 @@ export interface Settings {
   openai_base_url: string
   openai_model: string
   tmdb_language: string
+  ai_enabled: boolean
+  ai_daily_limit: number
 }
 
 export interface TestResult {
@@ -137,6 +139,8 @@ export interface MatchResult {
   candidates: Candidate[]
   chosen: Candidate | null
   confident: boolean
+  method: string | null
+  reason: string
   target: string | null
   error: string | null
 }
