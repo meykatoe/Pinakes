@@ -3,6 +3,8 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [vue()],
+  // hls.js 已延遲載入
+  build: { chunkSizeWarningLimit: 700 },
   server: {
     // 轉發後端
     proxy: { '/api': 'http://localhost:8000' },

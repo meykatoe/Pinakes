@@ -57,13 +57,12 @@ async def start_hls(
         mode, audio_mode = transcode.decide(info, path.suffix)
         raw = info.get("format", {}).get("duration")
         duration = float(raw) if raw else None
-        if mode == "direct" and start == 0:
+        # 前端自行跳轉
+        if mode == "direct":
             url = stream_url(
                 base_url(request, session), item_id, path.name, player.get_token(session)
             )
             return HlsOut(mode=mode, duration=duration, direct_url=url)
-        if mode == "direct":
-            mode, audio_mode = "remux", "copy" if audio_mode == "copy" else "aac"
         sess = await transcode.start_session(
             ffmpeg, item_id, path, mode, audio_mode, start
         )

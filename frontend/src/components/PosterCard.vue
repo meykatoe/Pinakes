@@ -6,71 +6,106 @@ defineEmits<{ select: [entry: MediaEntry] }>()
 </script>
 
 <template>
-  <button class="card" type="button" @click="$emit('select', entry)">
-    <img v-if="entry.poster_url" :src="entry.poster_url" :alt="entry.title" loading="lazy" />
-    <div v-else class="blank">{{ entry.title }}</div>
+  <button class="poster" type="button" :title="entry.title" @click="$emit('select', entry)">
+    <div class="frame">
+      <img v-if="entry.poster_url" :src="entry.poster_url" :alt="entry.title" loading="lazy" />
+      <div v-else class="blank">{{ entry.title }}</div>
+      <span v-if="entry.rating" class="rating">★ {{ entry.rating.toFixed(1) }}</span>
+      <span v-if="entry.media_type === 'tv'" class="kind">{{ entry.file_count }} 集</span>
+    </div>
     <div class="meta">
       <strong>{{ entry.title }}</strong>
-      <span>
-        {{ entry.year ?? '' }}
-        <template v-if="entry.rating"> · ★ {{ entry.rating }}</template>
-      </span>
+      <span>{{ entry.year ?? '' }}</span>
     </div>
   </button>
 </template>
 
 <style scoped>
-.card {
+.poster {
   all: unset;
   box-sizing: border-box;
-  flex: 0 0 9.5rem;
-  cursor: pointer;
   display: grid;
-  gap: 0.4rem;
+  gap: 0.45rem;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.frame {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: 0.55rem;
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 img,
 .blank {
   width: 100%;
-  aspect-ratio: 2 / 3;
-  border-radius: 0.5rem;
+  height: 100%;
   object-fit: cover;
-  background: color-mix(in srgb, currentColor 12%, transparent);
-  transition: transform 0.15s;
+  display: block;
 }
 
 .blank {
   display: grid;
   place-items: center;
-  padding: 0.5rem;
+  padding: 0.75rem;
   text-align: center;
-  box-sizing: border-box;
+  font-weight: 600;
+  color: var(--muted);
+  background: linear-gradient(160deg, var(--surface-3), var(--surface-2));
 }
 
-.card:hover img,
-.card:hover .blank,
-.card:focus-visible img,
-.card:focus-visible .blank {
-  transform: scale(1.04);
+.rating,
+.kind {
+  position: absolute;
+  top: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgb(0 0 0 / 0.65);
+  color: #fff;
+  backdrop-filter: blur(4px);
 }
 
-.card:focus-visible {
-  outline: 2px solid currentColor;
+.rating {
+  left: 0.4rem;
+  color: #ffd166;
+}
+
+.kind {
+  right: 0.4rem;
+}
+
+.poster:hover .frame,
+.poster:focus-visible .frame {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.4);
+}
+
+.poster:focus-visible .frame {
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 .meta {
   display: grid;
   font-size: 0.85rem;
+  line-height: 1.35;
 }
 
 .meta strong {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-weight: 600;
 }
 
 .meta span {
-  opacity: 0.7;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 </style>
