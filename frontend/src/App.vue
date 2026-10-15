@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
+import { logout } from './api'
+import { auth, refreshAuth } from './auth'
+import LoginView from './components/LoginView.vue'
 import OrganizePanel from './components/OrganizePanel.vue'
 import PosterWall from './components/PosterWall.vue'
 import SettingsPage from './components/SettingsPage.vue'
@@ -13,62 +16,85 @@ const tabs = [
   { id: 'settings', label: '設定' },
 ]
 
+onMounted(() => {
+  refreshAuth().catch(() => {
+    auth.value = { enabled: false, authenticated: true }
+  })
+})
+
+async function doLogout() {
+  await logout().catch(() => undefined)
+  if (auth.value) auth.value = { ...auth.value, authenticated: false }
+}
+
 const tab = computed(() =>
   tabs.some((t) => t.id === route.value[0]) ? route.value[0] : 'wall',
 )
 </script>
 
 <template>
-  <header class="top">
-    <a class="brand" href="#/wall">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="3" y="4" width="5" height="16" rx="1" />
-        <rect x="9.5" y="4" width="5" height="16" rx="1" />
-        <rect x="16" y="4" width="5" height="16" rx="1" transform="rotate(8 18.5 12)" />
-      </svg>
-      Pinakes
-    </a>
-    <nav>
-      <a
-        v-for="t in tabs"
-        :key="t.id"
-        :href="`#/${t.id}`"
-        :aria-current="tab === t.id ? 'page' : undefined"
-        :class="{ active: tab === t.id }"
-      >
-        {{ t.label }}
+  <div v-if="!auth" class="boot"><span class="spin"></span></div>
+  <LoginView v-else-if="!auth.authenticated" />
+  <template v-else>
+    <header class="top">
+      <a class="brand" href="#/wall">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4" width="5" height="16" rx="1" />
+          <rect x="9.5" y="4" width="5" height="16" rx="1" />
+          <rect x="16" y="4" width="5" height="16" rx="1" transform="rotate(8 18.5 12)" />
+        </svg>
+        Pinakes
       </a>
-    </nav>
-    <span class="spacer"></span>
-    <button
-      type="button"
-      class="btn ghost icon"
-      :title="theme === 'dark' ? '切換為淺色' : '切換為深色'"
-      :aria-label="theme === 'dark' ? '切換為淺色' : '切換為深色'"
-      @click="toggleTheme"
-    >
-      {{ theme === 'dark' ? '☀' : '☾' }}
-    </button>
-  </header>
+      <nav>
+        <a
+          v-for="t in tabs"
+          :key="t.id"
+          :href="`#/${t.id}`"
+          :aria-current="tab === t.id ? 'page' : undefined"
+          :class="{ active: tab === t.id }"
+        >
+          {{ t.label }}
+        </a>
+      </nav>
+      <span class="spacer"></span>
+      <button
+        type="button"
+        class="btn ghost icon"
+        :title="theme === 'dark' ? '切換為淺色' : '切換為深色'"
+        :aria-label="theme === 'dark' ? '切換為淺色' : '切換為深色'"
+        @click="toggleTheme"
+      >
+        {{ theme === 'dark' ? '☀' : '☾' }}
+      </button>
+      <button v-if="auth.enabled" type="button" class="btn ghost sm" @click="doLogout">登出</button>
+    </header>
 
-  <main class="page">
-    <PosterWall v-if="tab === 'wall'" />
-    <OrganizePanel v-else-if="tab === 'organize'" />
-    <SettingsPage
-      v-else
-      :section="route[1]"
-      @navigate="(s: string) => go('settings', s)"
-    />
-  </main>
+    <main class="page">
+      <PosterWall v-if="tab === 'wall'" />
+      <OrganizePanel v-else-if="tab === 'organize'" />
+      <SettingsPage
+        v-else
+        :section="route[1]"
+        @navigate="(s: string) => go('settings', s)"
+      />
+    </main>
 
-  <footer class="credit">
-    This product uses the TMDB API but is not endorsed or certified by TMDB.
-  </footer>
+    <footer class="credit">
+      This product uses the TMDB API but is not endorsed or certified by TMDB.
+    </footer>
+  </template>
 
   <UiLayer />
 </template>
 
 <style scoped>
+.boot {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
 .top {
   position: sticky;
   top: 0;

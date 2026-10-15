@@ -84,6 +84,9 @@ async function send<T>(url: string, method: string, body?: unknown): Promise<T> 
   } catch {
     throw new ApiError('無法連線到伺服器', 0)
   }
+  if (res.status === 401 && !url.startsWith('/api/auth/')) {
+    window.dispatchEvent(new Event('pinakes:unauthorized'))
+  }
   if (!res.ok) return detail(res)
   return res.status === 204 ? (undefined as T) : res.json()
 }
@@ -339,3 +342,18 @@ export const keepAliveHls = (sid: string) =>
 
 export const stopHls = (sid: string) =>
   fetch(`/api/hls/${sid}`, { method: 'DELETE', keepalive: true })
+
+export interface AuthStatus {
+  enabled: boolean
+  authenticated: boolean
+}
+
+export const getAuthStatus = () => send<AuthStatus>('/api/auth/status', 'GET')
+
+export const login = (password: string) =>
+  send<AuthStatus>('/api/auth/login', 'POST', { password })
+
+export const logout = () => send<void>('/api/auth/logout', 'POST')
+
+export const changePassword = (current: string, next: string) =>
+  send<AuthStatus>('/api/auth/password', 'PUT', { current, new: next })

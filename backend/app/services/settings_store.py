@@ -35,6 +35,7 @@ DEFAULTS = {
     "tv_template": "{title} ({year})/Season {season:02}/{title} - S{season:02}E{episode:02}",
     "inbox_path": "",
     "library_path": "",
+    "auth_password": "",
 }
 
 

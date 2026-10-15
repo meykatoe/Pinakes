@@ -4,6 +4,7 @@ import LibraryForm from './LibraryForm.vue'
 import MatchPreview from './MatchPreview.vue'
 import PlayersForm from './PlayersForm.vue'
 import RulesForm from './RulesForm.vue'
+import SecurityForm from './SecurityForm.vue'
 import SettingsForm from './SettingsForm.vue'
 
 const props = defineProps<{ section?: string }>()
@@ -15,6 +16,7 @@ const sections = [
   { id: 'naming', label: '辨識與命名', desc: '命名樣板、正則與比對測試' },
   { id: 'playback', label: '播放', desc: '內建播放與外部播放器' },
   { id: 'notify', label: '通知', desc: 'Email 整理通知' },
+  { id: 'security', label: '安全性', desc: '登入密碼' },
 ]
 
 const active = computed(() =>
@@ -56,8 +58,11 @@ const active = computed(() =>
         <SettingsForm section="playback" />
         <PlayersForm />
       </template>
-      <template v-else>
+      <template v-else-if="active === 'notify'">
         <SettingsForm section="notify" />
+      </template>
+      <template v-else>
+        <SecurityForm />
       </template>
     </div>
   </div>

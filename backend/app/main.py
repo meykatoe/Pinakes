@@ -2,14 +2,20 @@ import asyncio
 import contextlib
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlmodel import Session
 
+from app.api import auth as auth_api
 from app.api import health, hls, library, match, media, organize, play, rules, watch
 from app.api import settings as settings_api
 from app.config import settings
-from app.db import init_db
-from app.services import transcode, watcher
+from app.db import get_engine, init_db
+from app.services import auth, transcode, watcher
+
+# 免登入路徑
+PUBLIC = ("/api/health", "/api/auth/", "/api/stream/")
 
 
 @asynccontextmanager
@@ -30,12 +36,30 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Pinakes", lifespan=lifespan)
 
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith(PUBLIC):
+        with Session(get_engine()) as session:
+            stored = auth.stored_hash(session)
+        if not auth.is_authenticated(request, stored):
+            return JSONResponse({"detail": "請先登入"}, status_code=401)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-for module in (health, settings_api, library, rules, match, organize, watch, media, play, hls):
+ROUTERS = (
+    health, auth_api, settings_api, library, rules, match, organize, watch, media,
+    play, hls,
+)
+for module in ROUTERS:
     app.include_router(module.router, prefix="/api")
