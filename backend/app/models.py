@@ -14,3 +14,13 @@ class Category(SQLModel, table=True):
     # 相對於已整理目錄
     subdir: str = Field(unique=True)
     builtin: bool = False
+
+
+class ParseRule(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    pattern: str
+    # 數字越小越先比對
+    priority: int = 100
+    enabled: bool = True
+    media_type: str | None = None

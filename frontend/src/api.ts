@@ -77,3 +77,45 @@ export const updateCategory = (id: number, body: CategoryInput) =>
 
 export const deleteCategory = (id: number) =>
   send<void>(`/api/categories/${id}`, 'DELETE')
+
+export interface Rule {
+  id: number
+  name: string
+  pattern: string
+  priority: number
+  enabled: boolean
+  media_type: 'movie' | 'tv' | null
+}
+
+export type RuleInput = Omit<Rule, 'id'>
+
+export interface Naming {
+  movie_template: string
+  tv_template: string
+}
+
+export interface Preview {
+  parsed: Record<string, string | number | null>
+  rule: string | null
+  target: string | null
+  error: string | null
+}
+
+export const listRules = () => send<Rule[]>('/api/rules', 'GET')
+
+export const createRule = (body: RuleInput) =>
+  send<Rule>('/api/rules', 'POST', body)
+
+export const updateRule = (id: number, body: RuleInput) =>
+  send<Rule>(`/api/rules/${id}`, 'PUT', body)
+
+export const deleteRule = (id: number) =>
+  send<void>(`/api/rules/${id}`, 'DELETE')
+
+export const getNaming = () => send<Naming>('/api/naming', 'GET')
+
+export const saveNaming = (body: Naming) =>
+  send<Naming>('/api/naming', 'PUT', body)
+
+export const previewPath = (path: string) =>
+  send<Preview>('/api/parse/preview', 'POST', { path })
