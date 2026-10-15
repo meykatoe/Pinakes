@@ -13,6 +13,14 @@ export interface Settings {
   auto_execute: boolean
   organize_mode: string
   conflict_policy: string
+  smtp_host: string
+  smtp_port: number
+  smtp_user: string
+  smtp_password: string
+  smtp_security: string
+  smtp_from: string
+  notify_to: string
+  notify_enabled: boolean
 }
 
 export interface TestResult {
@@ -37,7 +45,7 @@ export const saveSettings = (body: Partial<Settings>) =>
     body: JSON.stringify(body),
   })
 
-export const testConnection = (target: 'tmdb' | 'openai') =>
+export const testConnection = (target: 'tmdb' | 'openai' | 'smtp') =>
   request<TestResult>(`/api/settings/test/${target}`, { method: 'POST' })
 
 export interface Paths {
@@ -210,6 +218,7 @@ export interface WatchStatus {
   running: boolean
   last_run: number | null
   last_error: string
+  last_mail_error: string
   waiting: number
   last_processed: { id: number; source: string; status: string }[]
 }

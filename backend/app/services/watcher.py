@@ -8,7 +8,7 @@ from sqlmodel import Session
 
 from app.db import get_engine
 from app.models import MediaItem
-from app.services import clients, organizer, settings_store
+from app.services import clients, mailer, organizer, settings_store
 from app.services.tmdb import TmdbError
 
 MIN_INTERVAL = 5
@@ -49,6 +49,7 @@ class WatchStatus:
     last_run: float | None = None
     last_error: str = ""
     waiting: int = 0
+    last_mail_error: str = ""
     last_processed: list[dict] = field(default_factory=list)
 
 
@@ -87,10 +88,27 @@ async def run_cycle(
         state = item.status
         if state == "planned" and auto:
             state = await asyncio.to_thread(_execute_in_thread, item.id)
+        session.refresh(item)
+        target = Path(item.target_path) if item.target_path else None
         results.append(
-            {"id": item.id, "source": Path(item.source_path).name, "status": state}
+            {
+                "id": item.id,
+                "source": Path(item.source_path).name,
+                "status": state,
+                "target": str(target.relative_to(library)) if target else "",
+                "error": item.error,
+                "reason": item.reason,
+            }
         )
     return results
+
+
+async def send_digest(session: Session, results: list[dict]) -> None:
+    try:
+        await mailer.notify(session, results)
+        status.last_mail_error = ""
+    except mailer.MailError as exc:
+        status.last_mail_error = str(exc)
 
 
 async def watch_loop() -> None:
@@ -111,6 +129,7 @@ async def watch_loop() -> None:
                         status.last_error = ""
                         if done:
                             status.last_processed = done
+                            await send_digest(session, done)
                     else:
                         tracker.reset()
                         status.waiting = 0

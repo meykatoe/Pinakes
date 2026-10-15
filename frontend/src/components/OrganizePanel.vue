@@ -73,6 +73,9 @@ const act = (fn: () => Promise<unknown>) => run(async () => void (await fn()))
     <p v-if="watch">
       監控：{{ watch.enabled ? '已啟用' : '未啟用' }}，等待穩定 {{ watch.waiting }} 個檔案
       <span v-if="watch.last_error" class="warn">（{{ watch.last_error }}）</span>
+      <span v-if="watch.last_mail_error" class="warn">
+        （{{ watch.last_mail_error }}）
+      </span>
     </p>
 
     <table>

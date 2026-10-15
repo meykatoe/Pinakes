@@ -13,6 +13,7 @@ class WatchOut(BaseModel):
     running: bool
     last_run: float | None
     last_error: str
+    last_mail_error: str
     waiting: int
     last_processed: list[dict]
 
@@ -25,6 +26,7 @@ def watch_status(session: Session = Depends(get_session)) -> WatchOut:
         running=st.running,
         last_run=st.last_run,
         last_error=st.last_error,
+        last_mail_error=st.last_mail_error,
         waiting=st.waiting,
         last_processed=st.last_processed,
     )

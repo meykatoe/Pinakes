@@ -1,13 +1,16 @@
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session
 
 from app.db import get_session
-from app.services import connectivity, settings_store
+from app.services import connectivity, mailer, settings_store
 
 router = APIRouter(prefix="/settings")
+
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class SettingsOut(BaseModel):
@@ -25,6 +28,14 @@ class SettingsOut(BaseModel):
     auto_execute: bool
     organize_mode: str
     conflict_policy: str
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password: str
+    smtp_security: str
+    smtp_from: str
+    notify_to: str
+    notify_enabled: bool
 
 
 class SettingsIn(BaseModel):
@@ -43,6 +54,21 @@ class SettingsIn(BaseModel):
     auto_execute: bool | None = None
     organize_mode: Literal["hardlink", "move", "copy", "symlink"] | None = None
     conflict_policy: Literal["skip", "overwrite", "keep_larger"] | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = Field(default=None, ge=1, le=65535)
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_security: Literal["starttls", "ssl", "none"] | None = None
+    smtp_from: str | None = None
+    notify_to: str | None = None
+    notify_enabled: bool | None = None
+
+    @field_validator("smtp_from", "notify_to")
+    @classmethod
+    def _email(cls, value: str | None) -> str | None:
+        if value and not EMAIL.match(value.strip()):
+            raise ValueError("Email 格式錯誤")
+        return value
 
 
 class TestResult(BaseModel):
@@ -62,12 +88,13 @@ def _build_out(session: Session) -> SettingsOut:
     for key in settings_store.SECRET_KEYS:
         data[key] = _mask(data[key])
     data["ai_enabled"] = data["ai_enabled"] == "true"
-    for key in ("ai_auto_apply", "watch_enabled", "auto_execute"):
+    for key in ("ai_auto_apply", "watch_enabled", "auto_execute", "notify_enabled"):
         data[key] = data[key] == "true"
     for key, fallback in (
         ("ai_daily_limit", 200),
         ("watch_interval", 30),
         ("stable_seconds", 60),
+        ("smtp_port", 587),
     ):
         try:
             data[key] = int(data[key])
@@ -94,9 +121,11 @@ def update_settings(
 
 @router.post("/test/{target}")
 async def test_connection(
-    target: Literal["tmdb", "openai"], session: Session = Depends(get_session)
+    target: Literal["tmdb", "openai", "smtp"], session: Session = Depends(get_session)
 ) -> TestResult:
-    if target == "tmdb":
+    if target == "smtp":
+        ok, message = await mailer.send_test(session)
+    elif target == "tmdb":
         key = settings_store.get_value(session, "tmdb_api_key")
         ok, message = await connectivity.check_tmdb(key)
     else:

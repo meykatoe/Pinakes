@@ -9,6 +9,14 @@ import {
 
 const saved = ref<Settings | null>(null)
 const form = reactive({
+  smtp_host: '',
+  smtp_port: 587,
+  smtp_user: '',
+  smtp_password: '',
+  smtp_security: 'starttls',
+  smtp_from: '',
+  notify_to: '',
+  notify_enabled: false,
   tmdb_api_key: '',
   openai_api_key: '',
   openai_base_url: '',
@@ -43,6 +51,14 @@ function fill(data: Settings) {
   form.conflict_policy = data.conflict_policy
   form.tmdb_api_key = ''
   form.openai_api_key = ''
+  form.smtp_password = ''
+  form.smtp_host = data.smtp_host
+  form.smtp_port = data.smtp_port
+  form.smtp_user = data.smtp_user
+  form.smtp_security = data.smtp_security
+  form.smtp_from = data.smtp_from
+  form.notify_to = data.notify_to
+  form.notify_enabled = data.notify_enabled
 }
 
 onMounted(async () => fill(await getSettings()))
@@ -52,11 +68,16 @@ async function save() {
   const body: Partial<Settings> = { ...form }
   if (!form.tmdb_api_key) delete body.tmdb_api_key
   if (!form.openai_api_key) delete body.openai_api_key
-  fill(await saveSettings(body))
-  message.value = '已儲存'
+  if (!form.smtp_password) delete body.smtp_password
+  try {
+    fill(await saveSettings(body))
+    message.value = '已儲存'
+  } catch (err) {
+    message.value = (err as Error).message
+  }
 }
 
-async function test(target: 'tmdb' | 'openai') {
+async function test(target: 'tmdb' | 'openai' | 'smtp') {
   results[target] = '測試中'
   const res = await testConnection(target)
   results[target] = `${res.ok ? '成功' : '失敗'}：${res.message}`
@@ -160,6 +181,53 @@ async function test(target: 'tmdb' | 'openai') {
         檔案穩定時間（秒，大小與修改時間不變多久才處理）
         <input v-model.number="form.stable_seconds" type="number" min="0" />
       </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Email 通知</legend>
+      <label class="check">
+        <input v-model="form.notify_enabled" type="checkbox" />
+        自動整理完成後寄出通知
+      </label>
+      <label>
+        收件 Email
+        <input v-model="form.notify_to" type="email" />
+      </label>
+      <label>
+        SMTP 主機
+        <input v-model="form.smtp_host" placeholder="smtp.gmail.com" />
+      </label>
+      <label>
+        連接埠
+        <input v-model.number="form.smtp_port" type="number" min="1" max="65535" />
+      </label>
+      <label>
+        加密方式
+        <select v-model="form.smtp_security">
+          <option value="starttls">STARTTLS（通常 587）</option>
+          <option value="ssl">SSL（通常 465）</option>
+          <option value="none">不加密</option>
+        </select>
+      </label>
+      <label>
+        帳號
+        <input v-model="form.smtp_user" autocomplete="off" />
+      </label>
+      <label>
+        密碼
+        <input
+          v-model="form.smtp_password"
+          type="password"
+          autocomplete="off"
+          :placeholder="saved?.smtp_password || '尚未設定'"
+        />
+      </label>
+      <label>
+        寄件人（留空則使用帳號）
+        <input v-model="form.smtp_from" type="email" />
+      </label>
+      <button type="button" @click="test('smtp')">寄送測試信</button>
+      <span>{{ results.smtp }}</span>
     </fieldset>
 
     <button type="submit">儲存</button>
