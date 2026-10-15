@@ -3,6 +3,7 @@ import json
 import os
 import re
 import threading
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -23,6 +24,17 @@ scan_lock = asyncio.Lock()
 
 class OrganizeError(Exception):
     pass
+
+
+@dataclass
+class Progress:
+    running: bool = False
+    done: int = 0
+    total: int = 0
+    current: str = ""
+
+
+progress = Progress()
 
 
 def _now() -> datetime:
@@ -75,9 +87,24 @@ async def plan_paths(
     inbox: Path,
     library: Path,
     paths: list[Path],
+    track: bool = False,
+) -> list[MediaItem]:
+    if track:
+        progress.running, progress.done, progress.total = True, 0, len(paths)
+    try:
+        return await _plan_all(session, client, ai, inbox, library, paths, track)
+    finally:
+        if track:
+            progress.running, progress.current = False, ""
+
+
+async def _plan_all(
+    session, client, ai, inbox, library, paths, track
 ) -> list[MediaItem]:
     items = []
     for path in paths:
+        if track:
+            progress.current = path.name
         try:
             stat = path.stat()
         except OSError:
@@ -92,12 +119,15 @@ async def plan_paths(
             session.add(item)
             session.commit()
         items.append(item)
+        if track:
+            progress.done += 1
     return items
 
 
 def pick_category(session: Session, item: MediaItem) -> Category:
     if item.category_id:
-        if cat := session.get(Category, item.category_id):
+        cat = session.get(Category, item.category_id)
+        if cat and cat.media_type == item.media_type:
             return cat
     stmt = (
         select(Category)
@@ -138,6 +168,8 @@ async def compute_target(
     src = Path(item.source_path)
     parsed = pipeline.parse_file(session, list(src.relative_to(inbox).parts))
     parsed.media_type = chosen.media_type
+    if chosen.media_type == "tv" and parsed.season is None:
+        parsed.season = 1
     values = await matcher.build_values(client, parsed, chosen)
     key = "tv_template" if chosen.media_type == "tv" else "movie_template"
     rel = naming.render(settings_store.get_value(session, key), values, parsed.ext)

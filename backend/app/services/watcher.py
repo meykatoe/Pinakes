@@ -81,7 +81,8 @@ async def run_cycle(
         if not stable:
             return []
         items = await organizer.plan_paths(
-            session, make_tmdb(session), make_ai(session), inbox, library, stable
+            session, make_tmdb(session), make_ai(session), inbox, library, stable,
+            track=True,
         )
     auto = settings_store.get_value(session, "auto_execute") == "true"
     results = []

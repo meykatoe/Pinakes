@@ -203,8 +203,30 @@ export interface Item {
   companions: { src: string; dst: string }[]
 }
 
-export const listItems = (status?: string) =>
-  send<Item[]>(`/api/organize/items${status ? `?status=${status}` : ''}`, 'GET')
+export const listItems = (status = '', q = '') =>
+  send<Item[]>(
+    `/api/organize/items?status=${encodeURIComponent(status)}&q=${encodeURIComponent(q)}`,
+    'GET',
+  )
+
+export const getSummary = () => send<Record<string, number>>('/api/organize/summary', 'GET')
+
+export interface ScanProgress {
+  running: boolean
+  done: number
+  total: number
+  current: string
+}
+
+export const getScanProgress = () =>
+  send<ScanProgress>('/api/organize/scan/progress', 'GET')
+
+export const searchTmdb = (q: string, mediaType: string, year?: number | null) =>
+  send<Candidate[]>(
+    `/api/tmdb/search?q=${encodeURIComponent(q)}&media_type=${mediaType}` +
+      (year ? `&year=${year}` : ''),
+    'GET',
+  )
 
 export const scan = () =>
   send<{ created: number; planned: number; pending_review: number }>(
@@ -227,11 +249,10 @@ export const undoItem = (id: number) =>
 export const skipItem = (id: number) =>
   send<Item>(`/api/organize/items/${id}/skip`, 'POST')
 
-export const chooseItem = (id: number, tmdbId?: number, categoryId?: number) =>
-  send<Item>(`/api/organize/items/${id}/choose`, 'POST', {
-    tmdb_id: tmdbId,
-    category_id: categoryId,
-  })
+export const chooseItem = (
+  id: number,
+  body: { tmdb_id?: number; category_id?: number; media_type?: string },
+) => send<Item>(`/api/organize/items/${id}/choose`, 'POST', body)
 
 export interface WatchStatus {
   enabled: boolean
@@ -240,7 +261,7 @@ export interface WatchStatus {
   last_error: string
   last_mail_error: string
   waiting: number
-  last_processed: { id: number; source: string; status: string }[]
+  last_processed: { id: number; source: string; status: string; target: string }[]
 }
 
 export const getWatchStatus = () => send<WatchStatus>('/api/watch/status', 'GET')

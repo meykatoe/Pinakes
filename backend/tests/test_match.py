@@ -45,6 +45,11 @@ class Fake:
             return httpx.Response(200, json={"results": items})
         if path == "/3/tv/1396/season/2/episode/5":
             return httpx.Response(200, json={"name": "Breakage"})
+        if path.startswith("/3/tv/") and path.count("/") == 3:
+            wanted = int(path.rsplit("/", 1)[1])
+            for item in TV:
+                if item["id"] == wanted:
+                    return httpx.Response(200, json=item)
         if path.startswith("/3/movie/"):
             wanted = int(path.rsplit("/", 1)[1])
             for items in MOVIES.values():
@@ -144,3 +149,13 @@ def test_score_title_and_year():
 def test_missing_key_raises():
     with pytest.raises(TmdbError):
         TmdbClient("")
+
+
+def test_tmdb_search(client, fake):
+    res = client.get("/api/tmdb/search", params={"q": "Dune"}).json()
+    assert [c["tmdb_id"] for c in res] == [1, 2]
+    res = client.get(
+        "/api/tmdb/search", params={"q": "Breaking Bad", "media_type": "tv"}
+    ).json()
+    assert res[0]["title"] == "絕命毒師"
+    assert client.get("/api/tmdb/search", params={"q": " "}).status_code == 422

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -80,3 +82,20 @@ async def match_preview(
         target=target,
         error=error,
     )
+
+
+@router.get("/tmdb/search")
+async def tmdb_search(
+    q: str,
+    media_type: Literal["movie", "tv"] = "movie",
+    year: int | None = None,
+    client: TmdbClient = Depends(tmdb_client),
+) -> list[matcher.Candidate]:
+    query = q.strip()
+    if not query:
+        raise HTTPException(422, "請輸入搜尋關鍵字")
+    try:
+        results = await client.search(media_type, query, year)
+    except TmdbError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return [matcher.to_candidate(media_type, r) for r in results[:20]]

@@ -255,3 +255,46 @@ def test_failure_rolls_back_main_file(client, env, monkeypatch):
     res = client.post(f"/api/organize/items/{item['id']}/execute").json()
     assert res["status"] == "failed" and "模擬失敗" in res["error"]
     assert not (lib / "電影").exists()
+
+
+def test_choose_changes_media_type(client, env):
+    inbox, lib, _ = env
+    make(inbox, "Unknown.Thing.mkv")
+    client.post("/api/organize/scan")
+    item = client.get("/api/organize/items").json()[0]
+    assert item["status"] == "pending_review"
+    assert item["media_type"] == "movie"
+    res = client.post(
+        f"/api/organize/items/{item['id']}/choose",
+        json={"tmdb_id": 1396, "media_type": "tv"},
+    ).json()
+    assert res["status"] == "planned"
+    assert res["media_type"] == "tv"
+    assert res["target_path"].startswith(str(lib / "影集" / "絕命毒師 (2008)"))
+
+
+def test_choose_category_type_mismatch(client, env):
+    inbox, _, _ = env
+    make(inbox, MATRIX)
+    client.post("/api/organize/scan")
+    item = client.get("/api/organize/items").json()[0]
+    tv_cat = next(c for c in client.get("/api/categories").json() if c["media_type"] == "tv")
+    res = client.post(
+        f"/api/organize/items/{item['id']}/choose", json={"category_id": tv_cat["id"]}
+    )
+    assert res.status_code == 422
+
+
+def test_summary_and_filter(client, env):
+    inbox, _, _ = env
+    make(inbox, MATRIX)
+    make(inbox, "Dune.1080p.mkv")
+    client.post("/api/organize/scan")
+    assert client.get("/api/organize/summary").json() == {
+        "planned": 1, "pending_review": 1,
+    }
+    found = client.get("/api/organize/items", params={"q": "dune"}).json()
+    assert len(found) == 1
+    progress = client.get("/api/organize/scan/progress").json()
+    assert progress["running"] is False
+    assert progress["done"] == progress["total"] == 2

@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
+from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, col, func, select
 
 from app.api.match import ai_client, tmdb_client
 from app.db import get_session
@@ -44,6 +45,15 @@ class ScanOut(BaseModel):
 class ChooseIn(BaseModel):
     tmdb_id: int | None = None
     category_id: int | None = None
+    # 修正類型
+    media_type: Literal["movie", "tv"] | None = None
+
+
+class ProgressOut(BaseModel):
+    running: bool
+    done: int
+    total: int
+    current: str
 
 
 class BatchOut(BaseModel):
@@ -77,12 +87,32 @@ def _roots(session: Session) -> tuple[Path, Path]:
 
 @router.get("/items")
 def list_items(
-    status: str | None = None, session: Session = Depends(get_session)
+    status: str | None = None,
+    q: str = "",
+    limit: int = Query(default=500, ge=1, le=5000),
+    session: Session = Depends(get_session),
 ) -> list[ItemOut]:
-    stmt = select(MediaItem).order_by(MediaItem.id.desc())
+    stmt = select(MediaItem).order_by(MediaItem.updated_at.desc(), MediaItem.id.desc())
     if status:
         stmt = stmt.where(MediaItem.status == status)
-    return [_out(session, i, False) for i in session.exec(stmt)]
+    if needle := q.strip():
+        like = f"%{needle}%"
+        stmt = stmt.where(
+            col(MediaItem.source_path).ilike(like) | col(MediaItem.title).ilike(like)
+        )
+    return [_out(session, i, False) for i in session.exec(stmt.limit(limit))]
+
+
+@router.get("/summary")
+def summary(session: Session = Depends(get_session)) -> dict[str, int]:
+    stmt = select(MediaItem.status, func.count()).group_by(MediaItem.status)
+    return {status: count for status, count in session.exec(stmt)}
+
+
+@router.get("/scan/progress")
+def scan_progress() -> ProgressOut:
+    p = organizer.progress
+    return ProgressOut(running=p.running, done=p.done, total=p.total, current=p.current)
 
 
 @router.post("/scan")
@@ -92,11 +122,13 @@ async def scan(
     ai: AiClient | None = Depends(ai_client),
 ) -> ScanOut:
     inbox, library = _roots(session)
+    if organizer.scan_lock.locked():
+        raise HTTPException(409, "正在掃描中，請稍候")
     async with organizer.scan_lock:
         paths = organizer.new_paths(session, inbox)
         try:
             items = await organizer.plan_paths(
-                session, client, ai, inbox, library, paths
+                session, client, ai, inbox, library, paths, track=True
             )
         except TmdbError as exc:
             raise HTTPException(502, str(exc)) from exc
@@ -118,14 +150,18 @@ async def choose(
     if item.status not in ("pending_review", "planned", "failed", "undone", "skipped"):
         raise HTTPException(422, "此項目目前無法重新選擇")
     inbox, library = _roots(session)
+    media_type = body.media_type or item.media_type
     if body.category_id is not None:
-        if session.get(Category, body.category_id) is None:
+        cat = session.get(Category, body.category_id)
+        if cat is None:
             raise HTTPException(422, "分類不存在")
+        if cat.media_type != media_type:
+            raise HTTPException(422, "分類類型與項目不符")
         item.category_id = body.category_id
     try:
         if body.tmdb_id is not None:
-            detail = await client.details(item.media_type, body.tmdb_id)
-            forced = matcher.to_candidate(item.media_type, detail)
+            detail = await client.details(media_type, body.tmdb_id)
+            forced = matcher.to_candidate(media_type, detail)
             await organizer.plan_item(session, client, None, item, inbox, library, forced)
         elif item.tmdb_id is not None:
             forced = matcher.Candidate(
@@ -133,6 +169,9 @@ async def choose(
                 title=item.title, original_title=item.title, year=item.year,
             )
             await organizer.plan_item(session, client, None, item, inbox, library, forced)
+        else:
+            session.add(item)
+            session.commit()
     except TmdbError as exc:
         raise HTTPException(502, str(exc)) from exc
     except (organizer.OrganizeError, ValueError) as exc:
