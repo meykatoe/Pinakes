@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { logout } from './api'
+import { computed, onMounted, ref, watch } from 'vue'
+import { getPaths, getSettings, logout } from './api'
 import { auth, refreshAuth } from './auth'
 import LoginView from './components/LoginView.vue'
 import OrganizePanel from './components/OrganizePanel.vue'
 import PosterWall from './components/PosterWall.vue'
 import SettingsPage from './components/SettingsPage.vue'
+import SetupWizard from './components/SetupWizard.vue'
 import { go, route } from './router'
 import { theme, toggleTheme } from './ui/theme'
 import UiLayer from './ui/UiLayer.vue'
@@ -16,11 +17,32 @@ const tabs = [
   { id: 'settings', label: '設定' },
 ]
 
+const setup = ref(false)
+
 onMounted(() => {
   refreshAuth().catch(() => {
     auth.value = { enabled: false, authenticated: true }
   })
 })
+
+// 首次啟動引導
+watch(
+  () => auth.value?.authenticated,
+  async (ok) => {
+    if (!ok) return
+    try {
+      if (localStorage.getItem('pinakes-setup-done')) return
+    } catch {
+      // 無法讀取
+    }
+    try {
+      const [s, p] = await Promise.all([getSettings(), getPaths()])
+      setup.value = !s.tmdb_api_key || !p.inbox_path || !p.library_path
+    } catch {
+      // 忽略
+    }
+  },
+)
 
 async function doLogout() {
   await logout().catch(() => undefined)
@@ -35,6 +57,7 @@ const tab = computed(() =>
 <template>
   <div v-if="!auth" class="boot"><span class="spin"></span></div>
   <LoginView v-else-if="!auth.authenticated" />
+  <SetupWizard v-else-if="setup" @done="setup = false" />
   <template v-else>
     <header class="top">
       <a class="brand" href="#/wall">

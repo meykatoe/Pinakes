@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
 from app.api import auth as auth_api
-from app.api import health, hls, library, match, media, organize, play, rules, watch
+from app.api import fs, health, hls, library, match, media, organize, play, rules, watch
 from app.api import settings as settings_api
 from app.config import settings
 from app.db import get_engine, init_db
@@ -58,7 +58,7 @@ app.add_middleware(
 )
 
 ROUTERS = (
-    health, auth_api, settings_api, library, rules, match, organize, watch, media,
+    health, auth_api, settings_api, fs, library, rules, match, organize, watch, media,
     play, hls,
 )
 for module in ROUTERS:

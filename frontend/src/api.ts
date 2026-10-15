@@ -378,3 +378,12 @@ export const logout = () => send<void>('/api/auth/logout', 'POST')
 
 export const changePassword = (current: string, next: string) =>
   send<AuthStatus>('/api/auth/password', 'PUT', { current, new: next })
+
+export interface DirListing {
+  path: string
+  parent: string | null
+  dirs: string[]
+}
+
+export const listDirs = (path = '') =>
+  send<DirListing>(`/api/fs/dirs?path=${encodeURIComponent(path)}`, 'GET')

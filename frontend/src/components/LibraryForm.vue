@@ -12,6 +12,7 @@ import {
   type Paths,
 } from '../api'
 import { confirm } from '../ui/confirm'
+import DirPicker from './DirPicker.vue'
 import { toast, toastError } from '../ui/toast'
 
 const paths = reactive({ inbox_path: '', library_path: '' })
@@ -85,16 +86,16 @@ async function remove(c: Category) {
   <section class="card">
     <div class="card-head"><h2>媒體庫目錄</h2></div>
     <form class="form-grid" @submit.prevent="submitPaths">
-      <label class="field">
+      <div class="field">
         <span>待整理目錄</span>
-        <input v-model="paths.inbox_path" class="input mono" placeholder="/downloads" />
+        <DirPicker v-model="paths.inbox_path" placeholder="/downloads" />
         <p class="hint">下載完成的檔案所在，Pinakes 只會讀取這裡</p>
-      </label>
-      <label class="field">
+      </div>
+      <div class="field">
         <span>已整理目錄</span>
-        <input v-model="paths.library_path" class="input mono" placeholder="/media" />
+        <DirPicker v-model="paths.library_path" placeholder="/media" />
         <p class="hint">整理後的檔案會依分類放到這裡</p>
-      </label>
+      </div>
       <p v-if="saved?.same_device === false" class="notice full">
         兩個目錄不在同一磁碟，無法使用硬連結，請改用移動或複製模式。
       </p>
