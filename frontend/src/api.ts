@@ -224,3 +224,48 @@ export interface WatchStatus {
 }
 
 export const getWatchStatus = () => send<WatchStatus>('/api/watch/status', 'GET')
+
+export interface MediaEntry {
+  media_type: 'movie' | 'tv'
+  tmdb_id: number
+  title: string
+  original_title: string
+  year: number | null
+  overview: string
+  rating: number
+  genres: string[]
+  poster_url: string | null
+  backdrop_url: string | null
+  category_id: number | null
+  file_count: number
+  added_at: string
+}
+
+export interface MediaDetail extends MediaEntry {
+  tagline: string
+  runtime: number | null
+  seasons: number | null
+  credits: { name: string; character: string }[]
+  trailer_key: string
+  files: {
+    item_id: number
+    season: number | null
+    episode: number | null
+    target_path: string
+  }[]
+}
+
+export const listMedia = (q = '', sort = 'recent') =>
+  send<MediaEntry[]>(
+    `/api/library/media?q=${encodeURIComponent(q)}&sort=${sort}`,
+    'GET',
+  )
+
+export const getMedia = (type: string, id: number) =>
+  send<MediaDetail>(`/api/library/media/${type}/${id}`, 'GET')
+
+export const scrapeAll = () =>
+  send<{ scraped: number }>('/api/library/scrape', 'POST')
+
+export const refreshMedia = (type: string, id: number) =>
+  send<{ ok: boolean }>(`/api/library/media/${type}/${id}/refresh`, 'POST')

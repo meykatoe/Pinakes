@@ -1,14 +1,14 @@
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.api.match import ai_client, tmdb_client
 from app.db import get_session
 from app.models import Category, MediaItem
-from app.services import matcher, organizer
+from app.services import matcher, organizer, scraper
 from app.services.ai import AiClient
 from app.services.tmdb import TmdbClient, TmdbError
 
@@ -148,8 +148,11 @@ def skip(item_id: int, session: Session = Depends(get_session)) -> ItemOut:
 
 
 @router.post("/items/{item_id}/execute")
-def execute(item_id: int, session: Session = Depends(get_session)) -> ItemOut:
+def execute(
+    item_id: int, background: BackgroundTasks, session: Session = Depends(get_session)
+) -> ItemOut:
     item = _get(session, item_id)
+    background.add_task(scraper.scrape_in_background)
     try:
         return _out(session, organizer.execute_item(session, item))
     except organizer.OrganizeError as exc:
@@ -157,7 +160,10 @@ def execute(item_id: int, session: Session = Depends(get_session)) -> ItemOut:
 
 
 @router.post("/execute")
-def execute_all(session: Session = Depends(get_session)) -> BatchOut:
+def execute_all(
+    background: BackgroundTasks, session: Session = Depends(get_session)
+) -> BatchOut:
+    background.add_task(scraper.scrape_in_background)
     out = BatchOut(done=0, skipped=0, failed=0)
     stmt = select(MediaItem).where(MediaItem.status == "planned").order_by(MediaItem.id)
     for item in list(session.exec(stmt)):

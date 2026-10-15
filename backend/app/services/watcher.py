@@ -8,7 +8,7 @@ from sqlmodel import Session
 
 from app.db import get_engine
 from app.models import MediaItem
-from app.services import clients, mailer, organizer, settings_store
+from app.services import clients, mailer, organizer, scraper, settings_store
 from app.services.tmdb import TmdbError
 
 MIN_INTERVAL = 5
@@ -111,6 +111,13 @@ async def send_digest(session: Session, results: list[dict]) -> None:
         status.last_mail_error = str(exc)
 
 
+async def scrape_new(session: Session) -> None:
+    try:
+        await scraper.scrape_missing(session, clients.build_tmdb(session))
+    except TmdbError:
+        return
+
+
 async def watch_loop() -> None:
     tracker = StabilityTracker()
     status.running = True
@@ -130,6 +137,7 @@ async def watch_loop() -> None:
                         if done:
                             status.last_processed = done
                             await send_digest(session, done)
+                            await scrape_new(session)
                     else:
                         tracker.reset()
                         status.waiting = 0

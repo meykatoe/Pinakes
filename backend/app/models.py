@@ -79,3 +79,22 @@ class OperationLog(SQLModel, table=True):
     backup: str = ""
     undone: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class MediaMeta(SQLModel, table=True):
+    media_type: str = Field(primary_key=True)
+    tmdb_id: int = Field(primary_key=True)
+    title: str = ""
+    original_title: str = ""
+    year: int | None = None
+    overview: str = ""
+    tagline: str = ""
+    genres: str = "[]"
+    rating: float = 0.0
+    runtime: int | None = None
+    seasons: int | None = None
+    credits: str = "[]"
+    trailer_key: str = ""
+    poster_path: str | None = None
+    backdrop_path: str | None = None
+    scraped_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
