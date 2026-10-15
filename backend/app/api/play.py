@@ -91,12 +91,12 @@ def delete_player(player_id: int, session: Session = Depends(get_session)) -> No
     session.commit()
 
 
-def _base(request: Request, session: Session) -> str:
+def base_url(request: Request, session: Session) -> str:
     override = settings_store.get_value(session, "public_base_url")
     return override or str(request.base_url).rstrip("/")
 
 
-def _playable(session: Session, item_id: int) -> tuple[MediaItem, Path]:
+def playable_item(session: Session, item_id: int) -> tuple[MediaItem, Path]:
     item = session.get(MediaItem, item_id)
     if item is None or item.status != "done" or not item.target_path:
         raise HTTPException(404, "找不到可播放的檔案")
@@ -111,7 +111,7 @@ def _playable(session: Session, item_id: int) -> tuple[MediaItem, Path]:
     return item, path
 
 
-def _stream_url(base: str, item_id: int, name: str, token: str) -> str:
+def stream_url(base: str, item_id: int, name: str, token: str) -> str:
     return f"{base}/api/stream/{item_id}/{quote(name, safe='')}?token={token}"
 
 
@@ -119,10 +119,10 @@ def _stream_url(base: str, item_id: int, name: str, token: str) -> str:
 def play_links(
     item_id: int, request: Request, session: Session = Depends(get_session)
 ) -> PlayOut:
-    item, path = _playable(session, item_id)
+    item, path = playable_item(session, item_id)
     token = player.get_token(session)
-    base = _base(request, session)
-    stream = _stream_url(base, item_id, path.name, token)
+    base = base_url(request, session)
+    stream = stream_url(base, item_id, path.name, token)
     links = []
     stmt = select(PlayerProfile).where(PlayerProfile.enabled).order_by(PlayerProfile.id)
     for profile in session.exec(stmt):
@@ -153,8 +153,8 @@ def playlist(
 ) -> PlainTextResponse:
     if not player.check_token(session, token):
         raise HTTPException(403, "權杖錯誤")
-    item, path = _playable(session, item_id)
-    stream = _stream_url(_base(request, session), item_id, path.name, token)
+    item, path = playable_item(session, item_id)
+    stream = stream_url(base_url(request, session), item_id, path.name, token)
     title = " ".join((item.title or path.stem).split())
     body = f"#EXTM3U\n#EXTINF:-1,{title}\n{stream}\n"
     return PlainTextResponse(
@@ -173,6 +173,6 @@ def stream(
 ) -> FileResponse:
     if not player.check_token(session, token):
         raise HTTPException(403, "權杖錯誤")
-    _, path = _playable(session, item_id)
+    _, path = playable_item(session, item_id)
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(path, media_type=media_type)

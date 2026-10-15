@@ -12,6 +12,7 @@ DEFAULTS = {
     "openai_model": "gpt-4o-mini",
     "tmdb_language": "zh-TW",
     "stream_token": "",
+    "ffmpeg_path": "",
     "public_base_url": "",
     "smtp_host": "",
     "smtp_port": "587",

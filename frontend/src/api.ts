@@ -14,6 +14,7 @@ export interface Settings {
   organize_mode: string
   conflict_policy: string
   public_base_url: string
+  ffmpeg_path: string
   smtp_host: string
   smtp_port: number
   smtp_user: string
@@ -303,3 +304,23 @@ export const getPlayInfo = (itemId: number) =>
 
 export const regenerateToken = () =>
   send<{ ok: boolean }>('/api/play/token/regenerate', 'POST')
+
+export interface HlsInfo {
+  mode: 'direct' | 'remux' | 'transcode'
+  duration: number | null
+  session_id: string | null
+  playlist_url: string | null
+  direct_url: string | null
+}
+
+export const getTranscodeStatus = () =>
+  send<{ available: boolean; ffmpeg: string | null }>('/api/transcode/status', 'GET')
+
+export const startHls = (itemId: number, start = 0) =>
+  send<HlsInfo>(`/api/play/${itemId}/hls`, 'POST', { start })
+
+export const keepAliveHls = (sid: string) =>
+  send<{ ok: boolean }>(`/api/hls/${sid}/keepalive`, 'POST')
+
+export const stopHls = (sid: string) =>
+  fetch(`/api/hls/${sid}`, { method: 'DELETE', keepalive: true })

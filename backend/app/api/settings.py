@@ -1,3 +1,4 @@
+import os
 import re
 from typing import Literal
 
@@ -30,6 +31,7 @@ class SettingsOut(BaseModel):
     organize_mode: str
     conflict_policy: str
     public_base_url: str
+    ffmpeg_path: str
     smtp_host: str
     smtp_port: int
     smtp_user: str
@@ -57,6 +59,7 @@ class SettingsIn(BaseModel):
     organize_mode: Literal["hardlink", "move", "copy", "symlink"] | None = None
     conflict_policy: Literal["skip", "overwrite", "keep_larger"] | None = None
     public_base_url: str | None = None
+    ffmpeg_path: str | None = None
     smtp_host: str | None = None
     smtp_port: int | None = Field(default=None, ge=1, le=65535)
     smtp_user: str | None = None
@@ -74,6 +77,16 @@ class SettingsIn(BaseModel):
         value = value.strip().rstrip("/")
         if value and not BASE_URL.match(value):
             raise ValueError("網址必須是 http:// 或 https:// 開頭")
+        return value
+
+    @field_validator("ffmpeg_path")
+    @classmethod
+    def _ffmpeg(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if value and not (os.path.isfile(value) and os.access(value, os.X_OK)):
+            raise ValueError("找不到可執行的 ffmpeg")
         return value
 
     @field_validator("smtp_from", "notify_to")

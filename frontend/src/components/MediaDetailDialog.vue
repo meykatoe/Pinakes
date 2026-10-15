@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import VideoPlayer from './VideoPlayer.vue'
 import {
   getMedia,
+  getTranscodeStatus,
   getPlayInfo,
   listPlayers,
   refreshMedia,
@@ -17,6 +19,8 @@ const detail = ref<MediaDetail | null>(null)
 const message = ref('')
 const players = ref<Player[]>([])
 const playerId = ref<number | null>(null)
+const canTranscode = ref(false)
+const playing = ref<number | null>(null)
 const PLAYER_KEY = 'pinakes-player'
 
 async function load() {
@@ -28,7 +32,7 @@ async function load() {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key === 'Escape' && playing.value === null) emit('close')
 }
 
 async function loadPlayers() {
@@ -68,6 +72,9 @@ async function play(itemId: number) {
 
 onMounted(() => {
   load()
+  getTranscodeStatus()
+    .then((r) => (canTranscode.value = r.available))
+    .catch(() => undefined)
   loadPlayers().catch((err) => (message.value = (err as Error).message))
   window.addEventListener('keydown', onKey)
 })
@@ -153,8 +160,11 @@ async function refresh() {
               <li v-for="f in files" :key="f.item_id">
                 <span v-if="f.episode !== null" class="ep">E{{ String(f.episode).padStart(2, '0') }}</span>
                 {{ f.target_path }}
+                <button type="button" :disabled="!canTranscode" @click="playing = f.item_id">
+                  內建播放
+                </button>
                 <button type="button" :disabled="playerId === null" @click="play(f.item_id)">
-                  播放
+                  外部播放器
                 </button>
               </li>
             </ul>
@@ -165,6 +175,12 @@ async function refresh() {
         </div>
       </div>
     </article>
+    <VideoPlayer
+      v-if="playing !== null"
+      :item-id="playing"
+      :title="entry.title"
+      @close="playing = null"
+    />
   </div>
 </template>
 
