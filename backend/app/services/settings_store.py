@@ -11,6 +11,8 @@ DEFAULTS = {
     "openai_base_url": "https://api.openai.com/v1",
     "openai_model": "gpt-4o-mini",
     "tmdb_language": "zh-TW",
+    "inbox_path": "",
+    "library_path": "",
 }
 
 

@@ -39,7 +39,8 @@ def _mask(value: str) -> str:
 
 
 def _build_out(session: Session) -> SettingsOut:
-    data = settings_store.get_all(session)
+    all_data = settings_store.get_all(session)
+    data = {k: all_data[k] for k in SettingsOut.model_fields}
     for key in settings_store.SECRET_KEYS:
         data[key] = _mask(data[key])
     return SettingsOut(**data)
