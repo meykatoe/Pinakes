@@ -1,10 +1,20 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health
+from app.api import health, settings as settings_api
 from app.config import settings
+from app.db import init_db
 
-app = FastAPI(title="Pinakes")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="Pinakes", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -14,3 +24,4 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/api")
+app.include_router(settings_api.router, prefix="/api")
