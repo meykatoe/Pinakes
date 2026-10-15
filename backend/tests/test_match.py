@@ -45,8 +45,12 @@ class Fake:
             return httpx.Response(200, json={"results": items})
         if path == "/3/tv/1396/season/2/episode/5":
             return httpx.Response(200, json={"name": "Breakage"})
-        if path == "/3/movie/603":
-            return httpx.Response(200, json=MOVIES["The Matrix"][0])
+        if path.startswith("/3/movie/"):
+            wanted = int(path.rsplit("/", 1)[1])
+            for items in MOVIES.values():
+                for item in items:
+                    if item["id"] == wanted:
+                        return httpx.Response(200, json=item)
         return httpx.Response(404)
 
 

@@ -16,6 +16,9 @@ const form = reactive({
   tmdb_language: '',
   ai_enabled: true,
   ai_daily_limit: 200,
+  ai_auto_apply: true,
+  organize_mode: 'hardlink',
+  conflict_policy: 'skip',
 })
 const results = reactive<Record<string, string>>({})
 const message = ref('')
@@ -27,6 +30,9 @@ function fill(data: Settings) {
   form.tmdb_language = data.tmdb_language
   form.ai_enabled = data.ai_enabled
   form.ai_daily_limit = data.ai_daily_limit
+  form.ai_auto_apply = data.ai_auto_apply
+  form.organize_mode = data.organize_mode
+  form.conflict_policy = data.conflict_policy
   form.tmdb_api_key = ''
   form.openai_api_key = ''
 }
@@ -95,12 +101,37 @@ async function test(target: 'tmdb' | 'openai') {
         <input v-model="form.ai_enabled" type="checkbox" />
         啟用 AI 輔助辨識
       </label>
+      <label class="check">
+        <input v-model="form.ai_auto_apply" type="checkbox" />
+        AI 的判斷結果自動採用（取消則需人工確認）
+      </label>
       <label>
         每日呼叫上限
         <input v-model.number="form.ai_daily_limit" type="number" min="0" />
       </label>
       <button type="button" @click="test('openai')">測試連線</button>
       <span>{{ results.openai }}</span>
+    </fieldset>
+
+    <fieldset>
+      <legend>整理方式</legend>
+      <label>
+        檔案處理模式
+        <select v-model="form.organize_mode">
+          <option value="hardlink">硬連結（需同磁碟）</option>
+          <option value="move">移動</option>
+          <option value="copy">複製</option>
+          <option value="symlink">軟連結</option>
+        </select>
+      </label>
+      <label>
+        目標已存在時
+        <select v-model="form.conflict_policy">
+          <option value="skip">略過</option>
+          <option value="keep_larger">保留較大的檔案</option>
+          <option value="overwrite">覆蓋（舊檔會備份）</option>
+        </select>
+      </label>
     </fieldset>
 
     <button type="submit">儲存</button>

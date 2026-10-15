@@ -18,6 +18,9 @@ class SettingsOut(BaseModel):
     tmdb_language: str
     ai_enabled: bool
     ai_daily_limit: int
+    ai_auto_apply: bool
+    organize_mode: str
+    conflict_policy: str
 
 
 class SettingsIn(BaseModel):
@@ -29,6 +32,9 @@ class SettingsIn(BaseModel):
     tmdb_language: str | None = None
     ai_enabled: bool | None = None
     ai_daily_limit: int | None = Field(default=None, ge=0)
+    ai_auto_apply: bool | None = None
+    organize_mode: Literal["hardlink", "move", "copy", "symlink"] | None = None
+    conflict_policy: Literal["skip", "overwrite", "keep_larger"] | None = None
 
 
 class TestResult(BaseModel):
@@ -48,6 +54,7 @@ def _build_out(session: Session) -> SettingsOut:
     for key in settings_store.SECRET_KEYS:
         data[key] = _mask(data[key])
     data["ai_enabled"] = data["ai_enabled"] == "true"
+    data["ai_auto_apply"] = data["ai_auto_apply"] == "true"
     try:
         data["ai_daily_limit"] = int(data["ai_daily_limit"])
     except ValueError:

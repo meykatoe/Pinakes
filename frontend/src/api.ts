@@ -6,6 +6,9 @@ export interface Settings {
   tmdb_language: string
   ai_enabled: boolean
   ai_daily_limit: number
+  ai_auto_apply: boolean
+  organize_mode: string
+  conflict_policy: string
 }
 
 export interface TestResult {
@@ -147,3 +150,53 @@ export interface MatchResult {
 
 export const previewMatch = (path: string, tmdbId?: number) =>
   send<MatchResult>('/api/match/preview', 'POST', { path, tmdb_id: tmdbId })
+
+export interface Item {
+  id: number
+  source_path: string
+  status: string
+  media_type: string
+  tmdb_id: number | null
+  title: string
+  year: number | null
+  season: number | null
+  episode: number | null
+  category_id: number | null
+  target_path: string
+  mode: string
+  method: string | null
+  reason: string
+  error: string
+  candidates: Candidate[]
+  companions: { src: string; dst: string }[]
+}
+
+export const listItems = (status?: string) =>
+  send<Item[]>(`/api/organize/items${status ? `?status=${status}` : ''}`, 'GET')
+
+export const scan = () =>
+  send<{ created: number; planned: number; pending_review: number }>(
+    '/api/organize/scan',
+    'POST',
+  )
+
+export const executeItem = (id: number) =>
+  send<Item>(`/api/organize/items/${id}/execute`, 'POST')
+
+export const executeAll = () =>
+  send<{ done: number; skipped: number; failed: number }>(
+    '/api/organize/execute',
+    'POST',
+  )
+
+export const undoItem = (id: number) =>
+  send<Item>(`/api/organize/items/${id}/undo`, 'POST')
+
+export const skipItem = (id: number) =>
+  send<Item>(`/api/organize/items/${id}/skip`, 'POST')
+
+export const chooseItem = (id: number, tmdbId?: number, categoryId?: number) =>
+  send<Item>(`/api/organize/items/${id}/choose`, 'POST', {
+    tmdb_id: tmdbId,
+    category_id: categoryId,
+  })

@@ -43,3 +43,39 @@ class AiCache(SQLModel, table=True):
 class AiUsage(SQLModel, table=True):
     day: str = Field(primary_key=True)
     calls: int = 0
+
+
+class MediaItem(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    source_path: str = Field(index=True)
+    size: int = 0
+    mtime: int = 0
+    # pending_review planned done failed skipped undone
+    status: str = Field(default="pending_review", index=True)
+    media_type: str = "movie"
+    tmdb_id: int | None = None
+    title: str = ""
+    year: int | None = None
+    season: int | None = None
+    episode: int | None = None
+    category_id: int | None = None
+    target_path: str = ""
+    mode: str = ""
+    method: str | None = None
+    reason: str = ""
+    error: str = ""
+    candidates: str = "[]"
+    companions: str = "[]"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class OperationLog(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    item_id: int = Field(index=True)
+    action: str
+    src: str
+    dst: str
+    backup: str = ""
+    undone: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
