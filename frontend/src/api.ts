@@ -30,26 +30,6 @@ export interface TestResult {
   message: string
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
-}
-
-export const getSettings = () => request<Settings>('/api/settings')
-
-export const saveSettings = (body: Partial<Settings>) =>
-  request<Settings>('/api/settings', {
-    method: 'PUT',
-    body: JSON.stringify(body),
-  })
-
-export const testConnection = (target: 'tmdb' | 'openai' | 'smtp') =>
-  request<TestResult>(`/api/settings/test/${target}`, { method: 'POST' })
-
 export interface Paths {
   inbox_path: string
   library_path: string
@@ -66,20 +46,55 @@ export interface Category {
 
 export type CategoryInput = Omit<Category, 'id' | 'builtin'>
 
+function describe(detail: unknown, status: number): string {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => String(d?.msg ?? '').replace(/^Value error, /, ''))
+      .filter(Boolean)
+    if (msgs.length) return msgs.join('；')
+  }
+  if (status === 401) return '請先登入'
+  if (status >= 500) return '伺服器錯誤，請稍後再試'
+  return `請求失敗（HTTP ${status}）`
+}
+
+export class ApiError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
 async function detail(res: Response): Promise<never> {
   const body = await res.json().catch(() => null)
-  throw new Error(body?.detail ?? `HTTP ${res.status}`)
+  throw new ApiError(describe(body?.detail, res.status), res.status)
 }
 
 async function send<T>(url: string, method: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method,
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch {
+    throw new ApiError('無法連線到伺服器', 0)
+  }
   if (!res.ok) return detail(res)
   return res.status === 204 ? (undefined as T) : res.json()
 }
+
+export const getSettings = () => send<Settings>('/api/settings', 'GET')
+
+export const saveSettings = (body: Partial<Settings>) =>
+  send<Settings>('/api/settings', 'PUT', body)
+
+export const testConnection = (target: 'tmdb' | 'openai' | 'smtp') =>
+  send<TestResult>(`/api/settings/test/${target}`, 'POST')
 
 export const getPaths = () => send<Paths>('/api/library/paths', 'GET')
 

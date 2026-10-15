@@ -52,8 +52,9 @@ class BatchOut(BaseModel):
     failed: int
 
 
-def _out(session: Session, item: MediaItem) -> ItemOut:
-    session.refresh(item)
+def _out(session: Session, item: MediaItem, fresh: bool = True) -> ItemOut:
+    if fresh:
+        session.refresh(item)
     data = item.model_dump()
     data["candidates"] = json.loads(item.candidates)
     data["companions"] = json.loads(item.companions)
@@ -81,7 +82,7 @@ def list_items(
     stmt = select(MediaItem).order_by(MediaItem.id.desc())
     if status:
         stmt = stmt.where(MediaItem.status == status)
-    return [_out(session, i) for i in session.exec(stmt)]
+    return [_out(session, i, False) for i in session.exec(stmt)]
 
 
 @router.post("/scan")
@@ -91,11 +92,14 @@ async def scan(
     ai: AiClient | None = Depends(ai_client),
 ) -> ScanOut:
     inbox, library = _roots(session)
-    paths = organizer.new_paths(session, inbox)
-    try:
-        items = await organizer.plan_paths(session, client, ai, inbox, library, paths)
-    except TmdbError as exc:
-        raise HTTPException(502, str(exc)) from exc
+    async with organizer.scan_lock:
+        paths = organizer.new_paths(session, inbox)
+        try:
+            items = await organizer.plan_paths(
+                session, client, ai, inbox, library, paths
+            )
+        except TmdbError as exc:
+            raise HTTPException(502, str(exc)) from exc
     return ScanOut(
         created=len(items),
         planned=sum(i.status == "planned" for i in items),

@@ -74,14 +74,15 @@ async def run_cycle(
 ) -> list[dict]:
     inbox, library = organizer.get_roots(session)
     stable_seconds = int(settings_store.get_value(session, "stable_seconds"))
-    candidates = organizer.new_paths(session, inbox)
-    stable = tracker.update(candidates, now, stable_seconds)
-    status.waiting = tracker.waiting - len(stable)
-    if not stable:
-        return []
-    items = await organizer.plan_paths(
-        session, make_tmdb(session), make_ai(session), inbox, library, stable
-    )
+    async with organizer.scan_lock:
+        candidates = organizer.new_paths(session, inbox)
+        stable = tracker.update(candidates, now, stable_seconds)
+        status.waiting = tracker.waiting - len(stable)
+        if not stable:
+            return []
+        items = await organizer.plan_paths(
+            session, make_tmdb(session), make_ai(session), inbox, library, stable
+        )
     auto = settings_store.get_value(session, "auto_execute") == "true"
     results = []
     for item in items:

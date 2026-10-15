@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -16,6 +17,8 @@ from app.services.tmdb import TmdbClient
 SUB_EXTS = {".srt", ".ass", ".ssa", ".sub", ".vtt", ".idx"}
 SAMPLE = re.compile(r"(?<![a-z])sample(?![a-z])", re.I)
 execute_lock = threading.Lock()
+# 避免重複掃描
+scan_lock = asyncio.Lock()
 
 
 class OrganizeError(Exception):
