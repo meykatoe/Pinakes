@@ -7,11 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
+from app import __version__
 from app.api import auth as auth_api
 from app.api import fs, health, hls, library, match, media, organize, play, rules, watch
 from app.api import settings as settings_api
 from app.config import settings
 from app.db import get_engine, init_db
+from app.web import mount_frontend
 from app.services import auth, transcode, watcher
 
 # 免登入路徑
@@ -34,7 +36,7 @@ async def lifespan(_: FastAPI):
         yield
 
 
-app = FastAPI(title="Pinakes", lifespan=lifespan)
+app = FastAPI(title="Pinakes", version=__version__, lifespan=lifespan)
 
 
 
@@ -63,3 +65,5 @@ ROUTERS = (
 )
 for module in ROUTERS:
     app.include_router(module.router, prefix="/api")
+
+mount_frontend(app, settings.static_dir)

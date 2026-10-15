@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +13,7 @@ from app.services import clients, mailer, organizer, scraper, settings_store
 from app.services.tmdb import TmdbError
 
 MIN_INTERVAL = 5
+log = logging.getLogger("pinakes.watcher")
 
 
 class StabilityTracker:
@@ -148,6 +150,7 @@ async def watch_loop() -> None:
             except (TmdbError, organizer.OrganizeError, ValueError, OSError) as exc:
                 status.last_error = str(exc)
             except Exception as exc:  # noqa: BLE001
+                log.exception("watch cycle failed")
                 status.last_error = f"未預期錯誤：{exc.__class__.__name__}"
             await asyncio.sleep(interval)
     finally:

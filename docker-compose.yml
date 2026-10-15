@@ -1,0 +1,16 @@
+services:
+  pinakes:
+    build: .
+    image: pinakes:latest
+    container_name: pinakes
+    restart: unless-stopped
+    # 檔案擁有者
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=Asia/Taipei
+    volumes:
+      - ./config:/config
+      # 硬連結需同一掛載
+      - /path/to/data:/data

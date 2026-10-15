@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ SIZES = {"poster": "w500", "backdrop": "w1280"}
 IMAGE_PATH = re.compile(r"^/[\w.-]+\.(?:jpg|jpeg|png|webp)$", re.I)
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
 CAST_LIMIT = 8
+log = logging.getLogger("pinakes.scraper")
 
 
 def image_file(media_type: str, tmdb_id: int, kind: str) -> Path:
@@ -127,4 +129,4 @@ async def scrape_in_background() -> None:
         with Session(get_engine()) as session:
             await scrape_missing(session, clients.build_tmdb(session))
     except Exception:  # noqa: BLE001
-        return
+        log.exception("background scrape failed")
