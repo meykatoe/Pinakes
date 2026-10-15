@@ -10,6 +10,7 @@ from app.services import connectivity, mailer, settings_store
 
 router = APIRouter(prefix="/settings")
 
+BASE_URL = re.compile(r"^https?://[^\s/?#]+$")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -28,6 +29,7 @@ class SettingsOut(BaseModel):
     auto_execute: bool
     organize_mode: str
     conflict_policy: str
+    public_base_url: str
     smtp_host: str
     smtp_port: int
     smtp_user: str
@@ -54,6 +56,7 @@ class SettingsIn(BaseModel):
     auto_execute: bool | None = None
     organize_mode: Literal["hardlink", "move", "copy", "symlink"] | None = None
     conflict_policy: Literal["skip", "overwrite", "keep_larger"] | None = None
+    public_base_url: str | None = None
     smtp_host: str | None = None
     smtp_port: int | None = Field(default=None, ge=1, le=65535)
     smtp_user: str | None = None
@@ -62,6 +65,16 @@ class SettingsIn(BaseModel):
     smtp_from: str | None = None
     notify_to: str | None = None
     notify_enabled: bool | None = None
+
+    @field_validator("public_base_url")
+    @classmethod
+    def _base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip().rstrip("/")
+        if value and not BASE_URL.match(value):
+            raise ValueError("網址必須是 http:// 或 https:// 開頭")
+        return value
 
     @field_validator("smtp_from", "notify_to")
     @classmethod
@@ -85,7 +98,7 @@ def _mask(value: str) -> str:
 def _build_out(session: Session) -> SettingsOut:
     all_data = settings_store.get_all(session)
     data = {k: all_data[k] for k in SettingsOut.model_fields}
-    for key in settings_store.SECRET_KEYS:
+    for key in settings_store.SECRET_KEYS & data.keys():
         data[key] = _mask(data[key])
     data["ai_enabled"] = data["ai_enabled"] == "true"
     for key in ("ai_auto_apply", "watch_enabled", "auto_execute", "notify_enabled"):

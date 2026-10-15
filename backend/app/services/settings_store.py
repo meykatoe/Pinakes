@@ -3,7 +3,7 @@ from sqlmodel import Session
 from app.models import Setting
 from app.security import decrypt, encrypt
 
-SECRET_KEYS = {"tmdb_api_key", "openai_api_key", "smtp_password"}
+SECRET_KEYS = {"tmdb_api_key", "openai_api_key", "smtp_password", "stream_token"}
 
 DEFAULTS = {
     "tmdb_api_key": "",
@@ -11,6 +11,8 @@ DEFAULTS = {
     "openai_base_url": "https://api.openai.com/v1",
     "openai_model": "gpt-4o-mini",
     "tmdb_language": "zh-TW",
+    "stream_token": "",
+    "public_base_url": "",
     "smtp_host": "",
     "smtp_port": "587",
     "smtp_user": "",

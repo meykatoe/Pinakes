@@ -98,3 +98,12 @@ class MediaMeta(SQLModel, table=True):
     poster_path: str | None = None
     backdrop_path: str | None = None
     scraped_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class PlayerProfile(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    # link 或 m3u
+    kind: str = "link"
+    template: str = ""
+    enabled: bool = True

@@ -6,6 +6,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import settings
 from app.services.categories import seed_categories
+from app.services.player import seed_players
 
 
 @lru_cache
@@ -19,6 +20,7 @@ def init_db() -> None:
     SQLModel.metadata.create_all(get_engine())
     with Session(get_engine()) as session:
         seed_categories(session)
+        seed_players(session)
 
 
 def get_session() -> Iterator[Session]:

@@ -1,12 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getMedia, refreshMedia, type MediaDetail, type MediaEntry } from '../api'
+import {
+  getMedia,
+  getPlayInfo,
+  listPlayers,
+  refreshMedia,
+  type MediaDetail,
+  type MediaEntry,
+  type Player,
+} from '../api'
 
 const props = defineProps<{ entry: MediaEntry }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 
 const detail = ref<MediaDetail | null>(null)
 const message = ref('')
+const players = ref<Player[]>([])
+const playerId = ref<number | null>(null)
+const PLAYER_KEY = 'pinakes-player'
 
 async function load() {
   try {
@@ -20,8 +31,44 @@ function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
 }
 
+async function loadPlayers() {
+  players.value = (await listPlayers()).filter((p) => p.enabled)
+  let saved: number | null = null
+  try {
+    saved = Number(localStorage.getItem(PLAYER_KEY)) || null
+  } catch {
+    // 無法讀取
+  }
+  const found = players.value.find((p) => p.id === saved)
+  playerId.value = found?.id ?? players.value[0]?.id ?? null
+}
+
+function rememberPlayer() {
+  try {
+    localStorage.setItem(PLAYER_KEY, String(playerId.value))
+  } catch {
+    // 無法寫入
+  }
+}
+
+async function play(itemId: number) {
+  try {
+    const info = await getPlayInfo(itemId)
+    const link = info.links.find((l) => l.player_id === playerId.value)
+    if (!link) {
+      message.value = '請先選擇播放器'
+      return
+    }
+    message.value = `已送出到 ${link.name}，若沒有反應請確認已安裝並註冊協定`
+    window.location.href = link.href
+  } catch (err) {
+    message.value = (err as Error).message
+  }
+}
+
 onMounted(() => {
   load()
+  loadPlayers().catch((err) => (message.value = (err as Error).message))
   window.addEventListener('keydown', onKey)
 })
 onUnmounted(() => window.removeEventListener('keydown', onKey))
@@ -93,13 +140,22 @@ async function refresh() {
             觀看預告片
           </a>
 
-          <h3>檔案</h3>
+          <h3>播放</h3>
+          <label class="picker">
+            播放器
+            <select v-model="playerId" @change="rememberPlayer">
+              <option v-for="p in players" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </label>
           <div v-for="[season, files] in seasons" :key="season">
             <h4 v-if="entry.media_type === 'tv'">第 {{ season }} 季</h4>
             <ul class="files">
               <li v-for="f in files" :key="f.item_id">
                 <span v-if="f.episode !== null" class="ep">E{{ String(f.episode).padStart(2, '0') }}</span>
                 {{ f.target_path }}
+                <button type="button" :disabled="playerId === null" @click="play(f.item_id)">
+                  播放
+                </button>
               </li>
             </ul>
           </div>
@@ -188,6 +244,12 @@ h2 {
   flex-wrap: wrap;
   gap: 0.25rem 1rem;
   font-size: 0.9rem;
+}
+
+.picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .files {

@@ -13,6 +13,7 @@ export interface Settings {
   auto_execute: boolean
   organize_mode: string
   conflict_policy: string
+  public_base_url: string
   smtp_host: string
   smtp_port: number
   smtp_user: string
@@ -269,3 +270,36 @@ export const scrapeAll = () =>
 
 export const refreshMedia = (type: string, id: number) =>
   send<{ ok: boolean }>(`/api/library/media/${type}/${id}/refresh`, 'POST')
+
+export interface Player {
+  id: number
+  name: string
+  kind: 'link' | 'm3u'
+  template: string
+  enabled: boolean
+}
+
+export type PlayerInput = Omit<Player, 'id'>
+
+export interface PlayInfo {
+  title: string
+  stream_url: string
+  links: { player_id: number; name: string; kind: string; href: string }[]
+}
+
+export const listPlayers = () => send<Player[]>('/api/players', 'GET')
+
+export const createPlayer = (body: PlayerInput) =>
+  send<Player>('/api/players', 'POST', body)
+
+export const updatePlayer = (id: number, body: PlayerInput) =>
+  send<Player>(`/api/players/${id}`, 'PUT', body)
+
+export const deletePlayer = (id: number) =>
+  send<void>(`/api/players/${id}`, 'DELETE')
+
+export const getPlayInfo = (itemId: number) =>
+  send<PlayInfo>(`/api/play/${itemId}`, 'GET')
+
+export const regenerateToken = () =>
+  send<{ ok: boolean }>('/api/play/token/regenerate', 'POST')

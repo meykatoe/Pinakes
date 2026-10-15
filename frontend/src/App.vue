@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import LibraryForm from './components/LibraryForm.vue'
 import MatchPreview from './components/MatchPreview.vue'
+import PlayersForm from './components/PlayersForm.vue'
 import OrganizePanel from './components/OrganizePanel.vue'
 import PosterWall from './components/PosterWall.vue'
 import RulesForm from './components/RulesForm.vue'
@@ -57,6 +58,7 @@ watch(tab, (value) => {
     <template v-else>
       <SettingsForm />
       <LibraryForm />
+      <PlayersForm />
       <RulesForm />
       <MatchPreview />
     </template>

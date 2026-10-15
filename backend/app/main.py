@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, library, match, media, organize, rules, watch
+from app.api import health, library, match, media, organize, play, rules, watch
 from app.api import settings as settings_api
 from app.config import settings
 from app.db import init_db
@@ -29,5 +29,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for module in (health, settings_api, library, rules, match, organize, watch, media):
+for module in (health, settings_api, library, rules, match, organize, watch, media, play):
     app.include_router(module.router, prefix="/api")

@@ -9,6 +9,7 @@ import {
 
 const saved = ref<Settings | null>(null)
 const form = reactive({
+  public_base_url: '',
   smtp_host: '',
   smtp_port: 587,
   smtp_user: '',
@@ -52,6 +53,7 @@ function fill(data: Settings) {
   form.tmdb_api_key = ''
   form.openai_api_key = ''
   form.smtp_password = ''
+  form.public_base_url = data.public_base_url
   form.smtp_host = data.smtp_host
   form.smtp_port = data.smtp_port
   form.smtp_user = data.smtp_user
@@ -180,6 +182,14 @@ async function test(target: 'tmdb' | 'openai' | 'smtp') {
       <label>
         檔案穩定時間（秒，大小與修改時間不變多久才處理）
         <input v-model.number="form.stable_seconds" type="number" min="0" />
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>播放</legend>
+      <label>
+        串流網址前綴（留空則自動判斷，播放器在別台裝置時填後端的區網位址）
+        <input v-model="form.public_base_url" placeholder="http://192.168.1.10:8000" />
       </label>
     </fieldset>
 
