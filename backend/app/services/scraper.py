@@ -99,7 +99,7 @@ async def scrape_one(
         await download_image(client, remote, kind, image_file(media_type, tmdb_id, kind))
     session.merge(meta)
     session.commit()
-    nfo_export.export_media(session, media_type, tmdb_id)
+    await nfo_export.export_media(session, client, media_type, tmdb_id)
     return meta
 
 
@@ -125,7 +125,7 @@ async def scrape_missing(session: Session, client: TmdbClient) -> int:
         except TmdbError:
             break
         count += 1
-    nfo_export.export_all(session)
+    await nfo_export.export_all(session, client)
     return count
 
 

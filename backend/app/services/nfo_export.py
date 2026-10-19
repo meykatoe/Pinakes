@@ -5,7 +5,9 @@ from sqlmodel import Session, select
 
 from app.models import Category, MediaItem, MediaMeta, OperationLog
 from app.services import fileops, nfo, organizer, settings_store
+from app.services.tmdb import TmdbClient, TmdbError
 
+MAX_MISSES = 3
 IMAGE_KINDS = (("poster", "poster"), ("backdrop", "fanart"))
 
 
@@ -69,7 +71,10 @@ def _export_movie(session, item, meta, base: Path) -> None:
     _images(session, item, meta, names)
 
 
-def _export_tv(session, item, meta, base: Path) -> None:
+def _export_tv(session, item, meta, base: Path, ep: dict | None) -> None:
+    if ep is not None:
+        target = Path(item.target_path)
+        _write(session, item, target.with_suffix(".nfo"), _text(nfo.episode_nfo(meta, ep)))
     template = settings_store.get_value(session, "tv_template")
     root = show_root(Path(item.target_path), template)
     if root == base or base not in root.parents:
@@ -79,7 +84,10 @@ def _export_tv(session, item, meta, base: Path) -> None:
     _images(session, item, meta, names)
 
 
-def export_item(session: Session, item: MediaItem, meta: MediaMeta, library: Path) -> None:
+def export_item(
+    session: Session, item: MediaItem, meta: MediaMeta, library: Path,
+    ep: dict | None = None,
+) -> None:
     category = session.get(Category, item.category_id) if item.category_id else None
     if category is None:
         return
@@ -88,14 +96,32 @@ def export_item(session: Session, item: MediaItem, meta: MediaMeta, library: Pat
     try:
         fileops.ensure_within(target, library)
         if item.media_type == "tv":
-            _export_tv(session, item, meta, base)
+            _export_tv(session, item, meta, base, ep)
         else:
             _export_movie(session, item, meta, base)
     except fileops.FileOpError:
         return
 
 
-def export_media(session: Session, media_type: str, tmdb_id: int) -> None:
+async def _fetch_episodes(client: TmdbClient, items: list[MediaItem]) -> dict[int, dict]:
+    found, misses = {}, 0
+    for item in items:
+        if item.media_type != "tv" or item.season is None or item.episode is None:
+            continue
+        if fileops.exists(Path(item.target_path).with_suffix(".nfo")):
+            continue
+        try:
+            found[item.id] = await client.episode(item.tmdb_id, item.season, item.episode)
+        except TmdbError:
+            misses += 1
+            if misses >= MAX_MISSES:
+                break
+    return found
+
+
+async def export_media(
+    session: Session, client: TmdbClient, media_type: str, tmdb_id: int
+) -> None:
     if settings_store.get_value(session, "nfo_enabled") != "true":
         return
     meta = session.get(MediaMeta, (media_type, tmdb_id))
@@ -110,17 +136,18 @@ def export_media(session: Session, media_type: str, tmdb_id: int) -> None:
         MediaItem.media_type == media_type,
         MediaItem.tmdb_id == tmdb_id,
     )
+    items = [i for i in session.exec(stmt) if Path(i.target_path).is_file()]
+    episodes = await _fetch_episodes(client, items)
     with organizer.execute_lock:
-        for item in session.exec(stmt):
-            if Path(item.target_path).is_file():
-                export_item(session, item, meta, library)
+        for item in items:
+            export_item(session, item, meta, library, episodes.get(item.id))
 
 
-def export_all(session: Session) -> None:
+async def export_all(session: Session, client: TmdbClient) -> None:
     if settings_store.get_value(session, "nfo_enabled") != "true":
         return
     stmt = select(MediaItem.media_type, MediaItem.tmdb_id).where(
         MediaItem.status == "done", MediaItem.tmdb_id != None  # noqa: E711
     ).distinct()
     for media_type, tmdb_id in list(session.exec(stmt)):
-        export_media(session, media_type, tmdb_id)
+        await export_media(session, client, media_type, tmdb_id)

@@ -1,11 +1,16 @@
+import asyncio
 import json
 from pathlib import Path
+
+import httpx
 
 from sqlmodel import Session, select
 
 from app import db
 from app.models import MediaMeta, OperationLog
 from app.services import nfo_export, settings_store
+from app.services.tmdb import TmdbClient
+from tests.test_match import Fake
 from tests.test_organize import MATRIX, env, make  # noqa: F401
 
 
@@ -30,9 +35,16 @@ def put_image(media_type: str, tmdb_id: int, kind: str) -> None:
     path.write_bytes(b"img")
 
 
-def run_export() -> None:
-    with Session(db.get_engine()) as s:
-        nfo_export.export_all(s)
+def run_export() -> Fake:
+    fake = Fake()
+
+    async def go():
+        with Session(db.get_engine()) as s:
+            client = TmdbClient("k" * 32, "zh-TW", s, httpx.MockTransport(fake.handler))
+            await nfo_export.export_all(s, client)
+
+    asyncio.run(go())
+    return fake
 
 
 def nfo_logs() -> list[OperationLog]:
@@ -103,15 +115,35 @@ def test_tv_show_file_shared_between_episodes(client, env):
     tmdb_id = items[0]["tmdb_id"]
     add_meta("tv", tmdb_id, "Breaking Bad")
     enable(images=False)
-    run_export()
     root = lib / "影集/絕命毒師 (2008)"
+    run_export()
     assert (root / "tvshow.nfo").is_file()
-    assert len(nfo_logs()) == 1
+    ep5 = root / "Season 02/絕命毒師 - S02E05.nfo"
+    assert "<title>Breakage</title>" in ep5.read_text("utf-8")
+    assert not (root / "Season 02/絕命毒師 - S02E06.nfo").exists()
+    assert len(nfo_logs()) == 2
+    run_export()
+    assert len(nfo_logs()) == 2
 
     client.post(f"/api/organize/items/{items[0]['id']}/undo")
     assert (root / "tvshow.nfo").is_file()
     client.post(f"/api/organize/items/{items[1]['id']}/undo")
     assert not (lib / "影集").exists()
+
+
+def test_episode_fetch_stops_after_misses(client, env):
+    inbox, lib, _ = env
+    for ep in range(6, 12):
+        make(inbox, f"Breaking.Bad.S02E{ep:02}.720p.mkv")
+    client.post("/api/organize/scan")
+    client.post("/api/organize/execute")
+    items = client.get("/api/organize/items").json()
+    add_meta("tv", items[0]["tmdb_id"], "Breaking Bad")
+    enable(images=False)
+    fake = run_export()
+    asked = [c for c in fake.calls if "/episode/" in c]
+    assert len(asked) == nfo_export.MAX_MISSES
+    assert (lib / "影集/絕命毒師 (2008)/tvshow.nfo").is_file()
 
 
 def test_flat_movie_uses_stem_names(client, env):
