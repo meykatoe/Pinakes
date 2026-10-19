@@ -158,3 +158,64 @@ def test_flat_movie_uses_stem_names(client, env):
     run_export()
     assert (lib / "電影/駭客任務 (1999).nfo").is_file()
     assert not (lib / "電影/movie.nfo").exists()
+
+
+def test_settings_roundtrip(client):
+    body = client.get("/api/settings").json()
+    assert body["nfo_enabled"] is False and body["nfo_images"] is True
+    res = client.put("/api/settings", json={"nfo_enabled": True, "nfo_images": False})
+    assert res.json()["nfo_enabled"] is True and res.json()["nfo_images"] is False
+
+
+def test_rebuild_requires_enabled(client):
+    assert client.post("/api/library/nfo").status_code == 400
+
+
+def test_rebuild_refreshes_old_meta_and_writes(client, env, monkeypatch):
+    inbox, lib, _ = env
+    make(inbox, MATRIX)
+    client.post("/api/organize/scan")
+    client.post("/api/organize/execute")
+    add_meta("movie", 603, "Matrix")
+    enable(images=False)
+    seen = []
+
+    async def fake_scrape(session, tmdb, media_type, tmdb_id):
+        seen.append((media_type, tmdb_id))
+        meta = session.get(MediaMeta, (media_type, tmdb_id))
+        meta.imdb_id = "tt0133093"
+        session.add(meta)
+        session.commit()
+
+    from app.services import scraper
+
+    monkeypatch.setattr(scraper, "scrape_one", fake_scrape)
+
+    async def go():
+        with Session(db.get_engine()) as s:
+            tmdb = TmdbClient("k" * 32, "zh-TW", s, httpx.MockTransport(Fake().handler))
+            await scraper.rebuild_nfo(s, tmdb)
+
+    asyncio.run(go())
+    assert seen == [("movie", 603)]
+    text = (lib / "電影/駭客任務 (1999)/movie.nfo").read_text("utf-8")
+    assert "tt0133093" in text
+
+
+def test_rebuild_endpoint_starts_once(client, monkeypatch):
+    from app.services import scraper
+
+    with Session(db.get_engine()) as s:
+        settings_store.set_value(s, "nfo_enabled", "true")
+    calls = []
+
+    async def fake_bg():
+        calls.append(1)
+
+    monkeypatch.setattr(scraper, "rebuild_nfo_in_background", fake_bg)
+    monkeypatch.setitem(scraper.rebuild_state, "running", False)
+    assert client.post("/api/library/nfo").json() == {"started": True}
+    assert calls == [1]
+    scraper.rebuild_state["running"] = True
+    assert client.post("/api/library/nfo").json() == {"started": False}
+    scraper.rebuild_state["running"] = False

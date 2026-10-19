@@ -7,6 +7,8 @@ export interface Settings {
   ai_enabled: boolean
   ai_daily_limit: number
   ai_auto_apply: boolean
+  nfo_enabled: boolean
+  nfo_images: boolean
   watch_enabled: boolean
   watch_interval: number
   stable_seconds: number
@@ -307,6 +309,9 @@ export const getMedia = (type: string, id: number) =>
 
 export const scrapeAll = () =>
   send<{ scraped: number }>('/api/library/scrape', 'POST')
+
+export const rebuildNfo = () =>
+  send<{ started: boolean }>('/api/library/nfo', 'POST')
 
 export const refreshMedia = (type: string, id: number) =>
   send<{ ok: boolean }>(`/api/library/media/${type}/${id}/refresh`, 'POST')

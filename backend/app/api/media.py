@@ -1,7 +1,7 @@
 import json
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from app.api.match import tmdb_client
 from app.db import get_session
 from app.models import MediaItem, MediaMeta
-from app.services import organizer, scraper
+from app.services import organizer, scraper, settings_store
 from app.services.tmdb import TmdbClient, TmdbError
 
 router = APIRouter()
@@ -145,6 +145,19 @@ async def scrape_all(
     client: TmdbClient = Depends(tmdb_client),
 ) -> dict[str, int]:
     return {"scraped": await scraper.scrape_missing(session, client)}
+
+
+@router.post("/library/nfo")
+def rebuild_nfo(
+    background: BackgroundTasks, session: Session = Depends(get_session)
+) -> dict[str, bool]:
+    if settings_store.get_value(session, "nfo_enabled") != "true":
+        raise HTTPException(400, "請先啟用 NFO 輸出")
+    if scraper.rebuild_state["running"]:
+        return {"started": False}
+    scraper.rebuild_state["running"] = True
+    background.add_task(scraper.rebuild_nfo_in_background)
+    return {"started": True}
 
 
 @router.post("/library/media/{media_type}/{tmdb_id}/refresh")

@@ -24,6 +24,8 @@ class SettingsOut(BaseModel):
     ai_enabled: bool
     ai_daily_limit: int
     ai_auto_apply: bool
+    nfo_enabled: bool
+    nfo_images: bool
     watch_enabled: bool
     watch_interval: int
     stable_seconds: int
@@ -52,6 +54,8 @@ class SettingsIn(BaseModel):
     ai_enabled: bool | None = None
     ai_daily_limit: int | None = Field(default=None, ge=0)
     ai_auto_apply: bool | None = None
+    nfo_enabled: bool | None = None
+    nfo_images: bool | None = None
     watch_enabled: bool | None = None
     watch_interval: int | None = Field(default=None, ge=5)
     stable_seconds: int | None = Field(default=None, ge=0)
@@ -114,7 +118,7 @@ def _build_out(session: Session) -> SettingsOut:
     for key in settings_store.SECRET_KEYS & data.keys():
         data[key] = _mask(data[key])
     data["ai_enabled"] = data["ai_enabled"] == "true"
-    for key in ("ai_auto_apply", "watch_enabled", "auto_execute", "notify_enabled"):
+    for key in ("ai_auto_apply", "nfo_enabled", "nfo_images", "watch_enabled", "auto_execute", "notify_enabled"):
         data[key] = data[key] == "true"
     for key, fallback in (
         ("ai_daily_limit", 200),

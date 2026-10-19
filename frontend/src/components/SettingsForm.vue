@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { getSettings, saveSettings, testConnection, type Settings } from '../api'
+import {
+  getSettings, rebuildNfo, saveSettings, testConnection, type Settings,
+} from '../api'
 import { toast, toastError } from '../ui/toast'
 
 type Section = 'connect' | 'organize' | 'playback' | 'notify'
@@ -15,7 +17,7 @@ const FIELDS: Record<Section, Key[]> = {
   ],
   organize: [
     'organize_mode', 'conflict_policy', 'watch_enabled', 'auto_execute',
-    'watch_interval', 'stable_seconds',
+    'watch_interval', 'stable_seconds', 'nfo_enabled', 'nfo_images',
   ],
   playback: ['public_base_url', 'ffmpeg_path'],
   notify: [
@@ -30,6 +32,7 @@ const form = reactive<Partial<Settings>>({})
 const results = reactive<Record<string, { ok: boolean; text: string } | null>>({})
 const testing = reactive<Record<string, boolean>>({})
 const saving = ref(false)
+const rebuilding = ref(false)
 
 const dirty = computed(() => {
   if (!saved.value) return false
@@ -76,6 +79,19 @@ async function clearSecret(key: Key) {
     toast('已清除')
   } catch (err) {
     toastError(err)
+  }
+}
+
+async function rebuild() {
+  if (dirty.value) await save()
+  rebuilding.value = true
+  try {
+    const res = await rebuildNfo()
+    toast(res.started ? '已開始在背景補產生' : '補產生仍在進行中')
+  } catch (err) {
+    toastError(err)
+  } finally {
+    rebuilding.value = false
   }
 }
 
@@ -255,6 +271,42 @@ async function test(target: 'tmdb' | 'openai' | 'smtp') {
             <input v-model.number="form.stable_seconds" class="input" type="number" min="0" />
             <p class="hint">大小與修改時間維持不變多久才處理，避免處理下載中的檔案</p>
           </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>媒體資訊檔（NFO）</h2>
+          <span v-if="saved.nfo_enabled" class="badge ok">已啟用</span>
+        </div>
+        <div class="form-grid">
+          <label class="check full">
+            <input v-model="form.nfo_enabled" type="checkbox" />
+            <span>
+              整理後輸出 NFO
+              <p class="hint">
+                在媒體庫寫入 movie.nfo、tvshow.nfo 與單集 NFO，供 Jellyfin、Emby、Kodi 讀取。已存在的檔案不會被覆蓋，還原時會一併移除
+              </p>
+            </span>
+          </label>
+          <label class="check full">
+            <input v-model="form.nfo_images" type="checkbox" :disabled="!form.nfo_enabled" />
+            <span>
+              同時複製海報與背景圖
+              <p class="hint">輸出 poster.jpg 與 fanart.jpg，每部作品約多佔數百 KB</p>
+            </span>
+          </label>
+          <div class="full">
+            <button
+              type="button"
+              class="btn sm"
+              :disabled="rebuilding || !saved.nfo_enabled"
+              @click="rebuild"
+            >
+              為現有媒體庫補產生
+            </button>
+            <p class="hint">依序處理已整理的作品，在背景執行，需先儲存並啟用</p>
+          </div>
         </div>
       </section>
     </template>

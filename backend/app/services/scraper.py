@@ -135,3 +135,31 @@ async def scrape_in_background() -> None:
             await scrape_missing(session, clients.build_tmdb(session))
     except Exception:  # noqa: BLE001
         log.exception("background scrape failed")
+
+
+rebuild_state = {"running": False}
+
+
+async def rebuild_nfo(session: Session, client: TmdbClient) -> None:
+    stmt = select(MediaItem.media_type, MediaItem.tmdb_id).where(
+        MediaItem.status == "done", MediaItem.tmdb_id != None  # noqa: E711
+    ).distinct()
+    for media_type, tmdb_id in list(session.exec(stmt)):
+        meta = session.get(MediaMeta, (media_type, tmdb_id))
+        if meta is not None and meta.imdb_id:
+            continue
+        try:
+            await scrape_one(session, client, media_type, tmdb_id)
+        except TmdbError:
+            break
+    await nfo_export.export_all(session, client)
+
+
+async def rebuild_nfo_in_background() -> None:
+    try:
+        with Session(get_engine()) as session:
+            await rebuild_nfo(session, clients.build_tmdb(session))
+    except Exception:  # noqa: BLE001
+        log.exception("background nfo rebuild failed")
+    finally:
+        rebuild_state["running"] = False
