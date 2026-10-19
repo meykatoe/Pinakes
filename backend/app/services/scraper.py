@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 from app.config import settings
 from app.db import get_engine
 from app.models import MediaItem, MediaMeta
-from app.services import clients
+from app.services import clients, nfo_export
 from app.services.tmdb import TmdbClient, TmdbError
 
 IMAGE_BASE = "https://image.tmdb.org/t/p"
@@ -99,6 +99,7 @@ async def scrape_one(
         await download_image(client, remote, kind, image_file(media_type, tmdb_id, kind))
     session.merge(meta)
     session.commit()
+    nfo_export.export_media(session, media_type, tmdb_id)
     return meta
 
 
@@ -124,6 +125,7 @@ async def scrape_missing(session: Session, client: TmdbClient) -> int:
         except TmdbError:
             break
         count += 1
+    nfo_export.export_all(session)
     return count
 
 

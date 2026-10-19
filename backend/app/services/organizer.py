@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models import Category, MediaItem, OperationLog
-from app.services import fileops, matcher, naming, pipeline, settings_store
+from app.services import fileops, matcher, naming, nfo, pipeline, settings_store
 from app.services.fileops import FileOpError
 from app.services.parser import VIDEO_EXTS
 from app.services.tmdb import TmdbClient
@@ -305,6 +305,25 @@ def _rollback(session: Session, logs: list[OperationLog], library: Path) -> None
     session.commit()
 
 
+def _hand_over(session: Session, item: MediaItem, log: OperationLog) -> bool:
+    # 共用檔轉給同目錄其他項目
+    if Path(log.dst).name not in nfo.SHARED:
+        return False
+    prefix = str(Path(log.dst).parent) + "/"
+    stmt = select(MediaItem).where(
+        MediaItem.status == "done",
+        MediaItem.id != item.id,
+        col(MediaItem.target_path).startswith(prefix),
+    )
+    other = session.exec(stmt).first()
+    if other is None:
+        return False
+    log.item_id = other.id
+    session.add(log)
+    session.commit()
+    return True
+
+
 def undo_item(session: Session, item: MediaItem) -> MediaItem:
     with execute_lock:
         if item.status != "done":
@@ -315,7 +334,9 @@ def undo_item(session: Session, item: MediaItem) -> MediaItem:
             .where(OperationLog.item_id == item.id, OperationLog.undone == False)  # noqa: E712
             .order_by(OperationLog.id.desc())
         )
-        for log in session.exec(stmt):
+        for log in list(session.exec(stmt)):
+            if log.action == "nfo" and _hand_over(session, item, log):
+                continue
             try:
                 fileops.revert(
                     log.action, Path(log.src), Path(log.dst), log.backup, library

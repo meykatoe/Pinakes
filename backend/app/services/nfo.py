@@ -1,6 +1,7 @@
 import json
 from xml.etree import ElementTree as ET
 
+SHARED = {"movie.nfo", "tvshow.nfo", "poster.jpg", "fanart.jpg"}
 HEADER = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n'
 
 

@@ -28,6 +28,8 @@ DEFAULTS = {
     "auto_execute": "true",
     "organize_mode": "hardlink",
     "conflict_policy": "skip",
+    "nfo_enabled": "false",
+    "nfo_images": "true",
     "ai_auto_apply": "true",
     "ai_enabled": "true",
     "ai_daily_limit": "200",
