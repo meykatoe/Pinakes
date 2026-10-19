@@ -73,6 +73,9 @@ def build_meta(media_type: str, data: dict) -> MediaMeta:
         rating=round(float(data.get("vote_average") or 0), 1),
         runtime=runtimes[0] if tv and runtimes else data.get("runtime"),
         seasons=data.get("number_of_seasons") if tv else None,
+        imdb_id=data.get("imdb_id")
+        or (data.get("external_ids") or {}).get("imdb_id")
+        or "",
         credits=json.dumps(
             [
                 {"name": c.get("name", ""), "character": c.get("character", "")}

@@ -100,6 +100,6 @@ class TmdbClient:
         kind = "tv" if media_type == "tv" else "movie"
         return await self.get(
             f"/{kind}/{tmdb_id}",
-            append_to_response="credits,videos",
+            append_to_response="credits,videos,external_ids",
             include_video_language="zh,en,null",
         )

@@ -93,6 +93,7 @@ class MediaMeta(SQLModel, table=True):
     rating: float = 0.0
     runtime: int | None = None
     seasons: int | None = None
+    imdb_id: str = ""
     credits: str = "[]"
     trailer_key: str = ""
     poster_path: str | None = None
