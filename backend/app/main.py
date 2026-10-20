@@ -20,12 +20,13 @@ from app.api import (
     play,
     rules,
     subtitles,
+    sync,
     watch,
 )
 from app.api import settings as settings_api
 from app.config import settings
 from app.db import get_engine, init_db
-from app.services import auth, transcode, watcher
+from app.services import auth, rclone_sync, transcode, watcher
 from app.web import mount_frontend
 
 # 免登入路徑
@@ -38,7 +39,7 @@ async def lifespan(_: FastAPI):
     if settings.watch_loop:
         reaper = asyncio.create_task(transcode.reaper())
         try:
-            async with watcher.background():
+            async with watcher.background(), rclone_sync.background():
                 yield
         finally:
             reaper.cancel()
@@ -72,7 +73,7 @@ app.add_middleware(
 )
 
 ROUTERS = (
-    health, auth_api, settings_api, fs, library, rules, match, organize, watch, media,
+    health, auth_api, settings_api, fs, library, rules, match, organize, watch, sync, media,
     play, hls, subtitles,
 )
 for module in ROUTERS:

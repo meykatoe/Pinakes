@@ -47,6 +47,11 @@ class SettingsOut(BaseModel):
     telegram_chat_id: str
     discord_enabled: bool
     discord_webhook: str
+    sync_enabled: bool
+    sync_source_path: str
+    sync_interval: int
+    sync_auto_organize: bool
+    sync_rc_url: str
 
 
 class SettingsIn(BaseModel):
@@ -82,6 +87,11 @@ class SettingsIn(BaseModel):
     telegram_chat_id: str | None = None
     discord_enabled: bool | None = None
     discord_webhook: str | None = None
+    sync_enabled: bool | None = None
+    sync_source_path: str | None = None
+    sync_interval: int | None = Field(default=None, ge=1)
+    sync_auto_organize: bool | None = None
+    sync_rc_url: str | None = None
 
     @field_validator("public_base_url")
     @classmethod
@@ -101,6 +111,26 @@ class SettingsIn(BaseModel):
         value = value.strip()
         if value and not (os.path.isfile(value) and os.access(value, os.X_OK)):
             raise ValueError("找不到可執行的 ffmpeg")
+        return value
+
+    @field_validator("sync_source_path")
+    @classmethod
+    def _source(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if value and not os.path.isdir(value):
+            raise ValueError("找不到同步來源資料夾")
+        return value
+
+    @field_validator("sync_rc_url")
+    @classmethod
+    def _rc_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip().rstrip("/")
+        if value and not BASE_URL.match(value):
+            raise ValueError("網址必須是 http:// 或 https:// 開頭")
         return value
 
     @field_validator("discord_webhook")
@@ -136,11 +166,13 @@ def _build_out(session: Session) -> SettingsOut:
         data[key] = _mask(data[key])
     data["ai_enabled"] = data["ai_enabled"] == "true"
     for key in ("ai_auto_apply", "nfo_enabled", "nfo_images", "watch_enabled", "auto_execute",
-                "notify_enabled", "telegram_enabled", "discord_enabled"):
+                "notify_enabled", "telegram_enabled", "discord_enabled",
+                "sync_enabled", "sync_auto_organize"):
         data[key] = data[key] == "true"
     for key, fallback in (
         ("ai_daily_limit", 200),
         ("watch_interval", 30),
+        ("sync_interval", 30),
         ("stable_seconds", 60),
         ("smtp_port", 587),
     ):

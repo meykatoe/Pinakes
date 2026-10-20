@@ -93,6 +93,12 @@ async def run_cycle(
             session, make_tmdb(session), make_ai(session), inbox, library, stable,
             track=True,
         )
+    return await finish_items(session, items, library)
+
+
+async def finish_items(
+    session: Session, items: list[MediaItem], library: Path
+) -> list[dict]:
     auto = settings_store.get_value(session, "auto_execute") == "true"
     results = []
     for item in items:

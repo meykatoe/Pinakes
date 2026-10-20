@@ -17,6 +17,7 @@ STATUS_TEXT = {
     "failed": "失敗",
     "skipped": "已略過",
     "planned": "待執行",
+    "synced": "已同步",
 }
 
 
