@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import {
-  getSettings, rebuildNfo, saveSettings, testConnection, type Settings,
+  getSettings, getSyncStatus, rebuildNfo, runSync, saveSettings, testConnection,
+  type Settings, type SyncStatus,
 } from '../api'
+import { relativeTime } from '../format'
 import { toast, toastError } from '../ui/toast'
+import DirPicker from './DirPicker.vue'
 
-type Section = 'connect' | 'organize' | 'playback' | 'notify'
+type Section = 'connect' | 'organize' | 'sync' | 'playback' | 'notify'
 type Key = keyof Settings
 
 const props = defineProps<{ section: Section }>()
@@ -18,6 +21,10 @@ const FIELDS: Record<Section, Key[]> = {
   organize: [
     'organize_mode', 'conflict_policy', 'watch_enabled', 'auto_execute',
     'watch_interval', 'stable_seconds', 'nfo_enabled', 'nfo_images',
+  ],
+  sync: [
+    'sync_enabled', 'sync_source_path', 'sync_interval', 'sync_auto_organize',
+    'sync_rc_url',
   ],
   playback: ['public_base_url', 'ffmpeg_path'],
   notify: [
@@ -52,13 +59,47 @@ function fill(data: Settings) {
   }
 }
 
+const sync = ref<SyncStatus | null>(null)
+const syncing = ref(false)
+let timer: ReturnType<typeof setInterval> | undefined
+
+async function loadSync() {
+  sync.value = await getSyncStatus()
+  if (!sync.value.busy && timer) {
+    clearInterval(timer)
+    timer = undefined
+    syncing.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     fill(await getSettings())
+    if (props.section === 'sync') await loadSync()
   } catch (err) {
     toastError(err)
   }
 })
+
+onUnmounted(() => clearInterval(timer))
+
+async function syncNow() {
+  if (dirty.value) await save()
+  syncing.value = true
+  try {
+    const res = await runSync()
+    if (!res.started) toast('同步仍在進行中')
+    await loadSync()
+    if (sync.value?.busy || res.started) {
+      timer ??= setInterval(() => loadSync().catch(() => {}), 2000)
+    } else {
+      syncing.value = false
+    }
+  } catch (err) {
+    syncing.value = false
+    toastError(err)
+  }
+}
 
 async function save() {
   const body: Partial<Settings> = {}
@@ -311,6 +352,66 @@ async function test(target: Parameters<typeof testConnection>[0]) {
             </button>
             <p class="hint">依序處理已整理的作品，在背景執行，需先儲存並啟用</p>
           </div>
+        </div>
+      </section>
+    </template>
+
+    <template v-else-if="section === 'sync'">
+      <section class="card">
+        <div class="card-head">
+          <h2>雲端同步</h2>
+          <span v-if="saved.sync_enabled" class="badge ok">已啟用</span>
+        </div>
+        <p class="hint intro">
+          先自行用 rclone 掛載雲端硬碟（例如 PikPak），Pinakes 會定時掃描指定資料夾，
+          把新檔複製到待整理目錄。雲端原檔會保留。
+        </p>
+        <div class="form-grid">
+          <label class="check full">
+            <input v-model="form.sync_enabled" type="checkbox" />
+            <span>
+              定時檢查並同步新檔案
+              <p class="hint">啟用前請先設定待整理與已整理目錄</p>
+            </span>
+          </label>
+          <div class="field full">
+            <span>掛載的來源資料夾</span>
+            <DirPicker
+              :model-value="form.sync_source_path ?? ''"
+              placeholder="/mnt/pikpak/downloads"
+              @update:model-value="form.sync_source_path = $event"
+            />
+            <p class="hint">不可包含或位於待整理、已整理目錄內</p>
+          </div>
+          <label class="field">
+            <span>檢查間隔（分鐘）</span>
+            <input v-model.number="form.sync_interval" class="input" type="number" min="1" />
+          </label>
+          <label class="field">
+            <span>rclone 遠端控制網址</span>
+            <input v-model="form.sync_rc_url" class="input mono" placeholder="http://127.0.0.1:5572" />
+            <p class="hint">選填。掛載時加 --rc，每次同步前會先刷新目錄快取</p>
+          </label>
+          <label class="check full">
+            <input v-model="form.sync_auto_organize" type="checkbox" />
+            <span>
+              同步後自動辨識與整理
+              <p class="hint">
+                關閉時只複製到待整理目錄並通知；若「自動監控」已開啟，監控仍會整理這些檔案
+              </p>
+            </span>
+          </label>
+        </div>
+        <div class="row test">
+          <button type="button" class="btn sm" :disabled="syncing" @click="syncNow">
+            <span v-if="syncing" class="spin"></span>
+            立即同步
+          </button>
+          <span v-if="sync?.last_run" class="muted">
+            上次同步 {{ relativeTime(sync.last_run) }}，處理 {{ sync.last_count }} 個
+            <template v-if="sync.last_failed">，失敗 {{ sync.last_failed }} 個</template>
+          </span>
+          <span v-if="sync?.last_error" class="danger-text">{{ sync.last_error }}</span>
         </div>
       </section>
     </template>

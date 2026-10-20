@@ -30,6 +30,11 @@ export interface Settings {
   telegram_chat_id: string
   discord_enabled: boolean
   discord_webhook: string
+  sync_enabled: boolean
+  sync_source_path: string
+  sync_interval: number
+  sync_auto_organize: boolean
+  sync_rc_url: string
 }
 
 export interface TestResult {
@@ -274,6 +279,21 @@ export interface WatchStatus {
 }
 
 export const getWatchStatus = () => send<WatchStatus>('/api/watch/status', 'GET')
+
+export interface SyncStatus {
+  enabled: boolean
+  running: boolean
+  busy: boolean
+  last_run: number | null
+  last_error: string
+  last_count: number
+  last_failed: number
+}
+
+export const getSyncStatus = () => send<SyncStatus>('/api/sync/status', 'GET')
+
+export const runSync = () =>
+  send<{ started: boolean }>('/api/sync/run', 'POST')
 
 export interface MediaEntry {
   media_type: 'movie' | 'tv'

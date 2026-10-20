@@ -14,3 +14,5 @@ services:
       - ./config:/config
       # 硬連結需同一掛載
       - /path/to/data:/data
+      # rclone 掛載點，需要時取消註解
+      # - /mnt/pikpak:/mnt/pikpak:ro,rslave

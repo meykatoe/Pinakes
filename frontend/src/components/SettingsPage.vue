@@ -49,6 +49,7 @@ const active = computed(() =>
       <template v-else-if="active === 'library'">
         <LibraryForm />
         <SettingsForm section="organize" />
+        <SettingsForm section="sync" />
       </template>
       <template v-else-if="active === 'naming'">
         <RulesForm />
