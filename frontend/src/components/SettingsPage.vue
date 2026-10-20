@@ -15,7 +15,7 @@ const sections = [
   { id: 'library', label: '媒體庫', desc: '目錄、分類與整理方式' },
   { id: 'naming', label: '辨識與命名', desc: '命名樣板、正則與比對測試' },
   { id: 'playback', label: '播放', desc: '內建播放與外部播放器' },
-  { id: 'notify', label: '通知', desc: 'Email 整理通知' },
+  { id: 'notify', label: '通知', desc: 'Email、Telegram、Discord' },
   { id: 'security', label: '安全性', desc: '登入密碼' },
 ]
 

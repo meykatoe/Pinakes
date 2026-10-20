@@ -22,10 +22,14 @@ const FIELDS: Record<Section, Key[]> = {
   playback: ['public_base_url', 'ffmpeg_path'],
   notify: [
     'notify_enabled', 'notify_to', 'smtp_host', 'smtp_port', 'smtp_security',
-    'smtp_user', 'smtp_password', 'smtp_from',
+    'smtp_user', 'smtp_password', 'smtp_from', 'telegram_enabled',
+    'telegram_token', 'telegram_chat_id', 'discord_enabled', 'discord_webhook',
   ],
 }
-const SECRETS: Key[] = ['tmdb_api_key', 'openai_api_key', 'smtp_password']
+const SECRETS: Key[] = [
+  'tmdb_api_key', 'openai_api_key', 'smtp_password', 'telegram_token',
+  'discord_webhook',
+]
 
 const saved = ref<Settings | null>(null)
 const form = reactive<Partial<Settings>>({})
@@ -95,7 +99,7 @@ async function rebuild() {
   }
 }
 
-async function test(target: 'tmdb' | 'openai' | 'smtp') {
+async function test(target: Parameters<typeof testConnection>[0]) {
   if (dirty.value) await save()
   testing[target] = true
   results[target] = null
@@ -392,6 +396,103 @@ async function test(target: 'tmdb' | 'openai' | 'smtp') {
           </button>
           <span v-if="results.smtp" :class="results.smtp.ok ? 'ok-text' : 'danger-text'">
             {{ results.smtp.text }}
+          </span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Telegram 通知</h2>
+          <span v-if="saved.telegram_enabled" class="badge ok">已啟用</span>
+        </div>
+        <p class="hint intro">
+          向 @BotFather 建立機器人取得金鑰，再對機器人傳一則訊息，並以 @userinfobot
+          之類的工具查詢自己的聊天室 ID。
+        </p>
+        <div class="form-grid">
+          <label class="check full">
+            <input v-model="form.telegram_enabled" type="checkbox" />
+            <span>
+              自動整理後發送到 Telegram
+              <p class="hint">與 Email 可同時啟用</p>
+            </span>
+          </label>
+          <label class="field">
+            <span>機器人金鑰</span>
+            <input
+              v-model="form.telegram_token"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="saved.telegram_token || '尚未設定'"
+            />
+          </label>
+          <label class="field">
+            <span>聊天室 ID</span>
+            <input v-model="form.telegram_chat_id" class="input mono" placeholder="123456789" />
+          </label>
+        </div>
+        <div class="row test">
+          <button type="button" class="btn sm" :disabled="testing.telegram" @click="test('telegram')">
+            <span v-if="testing.telegram" class="spin"></span>
+            發送測試訊息
+          </button>
+          <button
+            v-if="saved.telegram_token"
+            type="button"
+            class="btn sm ghost danger"
+            @click="clearSecret('telegram_token')"
+          >
+            清除金鑰
+          </button>
+          <span v-if="results.telegram" :class="results.telegram.ok ? 'ok-text' : 'danger-text'">
+            {{ results.telegram.text }}
+          </span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Discord 通知</h2>
+          <span v-if="saved.discord_enabled" class="badge ok">已啟用</span>
+        </div>
+        <p class="hint intro">
+          在 Discord 頻道的「編輯頻道 → 整合 → Webhook」建立並複製網址。
+        </p>
+        <div class="form-grid">
+          <label class="check full">
+            <input v-model="form.discord_enabled" type="checkbox" />
+            <span>
+              自動整理後發送到 Discord
+              <p class="hint">與 Email 可同時啟用</p>
+            </span>
+          </label>
+          <label class="field full">
+            <span>Webhook 網址</span>
+            <input
+              v-model="form.discord_webhook"
+              class="input mono"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="saved.discord_webhook || '尚未設定'"
+            />
+          </label>
+        </div>
+        <div class="row test">
+          <button type="button" class="btn sm" :disabled="testing.discord" @click="test('discord')">
+            <span v-if="testing.discord" class="spin"></span>
+            發送測試訊息
+          </button>
+          <button
+            v-if="saved.discord_webhook"
+            type="button"
+            class="btn sm ghost danger"
+            @click="clearSecret('discord_webhook')"
+          >
+            清除網址
+          </button>
+          <span v-if="results.discord" :class="results.discord.ok ? 'ok-text' : 'danger-text'">
+            {{ results.discord.text }}
           </span>
         </div>
       </section>

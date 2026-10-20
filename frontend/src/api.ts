@@ -25,6 +25,11 @@ export interface Settings {
   smtp_from: string
   notify_to: string
   notify_enabled: boolean
+  telegram_enabled: boolean
+  telegram_token: string
+  telegram_chat_id: string
+  discord_enabled: boolean
+  discord_webhook: string
 }
 
 export interface TestResult {
@@ -98,7 +103,9 @@ export const getSettings = () => send<Settings>('/api/settings', 'GET')
 export const saveSettings = (body: Partial<Settings>) =>
   send<Settings>('/api/settings', 'PUT', body)
 
-export const testConnection = (target: 'tmdb' | 'openai' | 'smtp') =>
+export const testConnection = (
+  target: 'tmdb' | 'openai' | 'smtp' | 'telegram' | 'discord',
+) =>
   send<TestResult>(`/api/settings/test/${target}`, 'POST')
 
 export const getPaths = () => send<Paths>('/api/library/paths', 'GET')
