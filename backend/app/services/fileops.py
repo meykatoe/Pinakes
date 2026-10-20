@@ -60,7 +60,7 @@ def _move(src: Path, dst: Path) -> None:
         _copy(src, dst)
         if dst.stat().st_size != src.stat().st_size:
             dst.unlink(missing_ok=True)
-            raise FileOpError("跨磁碟移動後大小不符")
+            raise FileOpError("跨磁碟移動後大小不符") from None
         src.unlink()
 
 

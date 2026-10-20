@@ -10,13 +10,23 @@ from sqlmodel import Session
 from app import __version__
 from app.api import auth as auth_api
 from app.api import (
-    fs, health, hls, library, match, media, organize, play, rules, subtitles, watch,
+    fs,
+    health,
+    hls,
+    library,
+    match,
+    media,
+    organize,
+    play,
+    rules,
+    subtitles,
+    watch,
 )
 from app.api import settings as settings_api
 from app.config import settings
 from app.db import get_engine, init_db
-from app.web import mount_frontend
 from app.services import auth, transcode, watcher
+from app.web import mount_frontend
 
 # 免登入路徑
 PUBLIC = ("/api/health", "/api/auth/", "/api/stream/")

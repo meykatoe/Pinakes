@@ -1,8 +1,8 @@
 import pytest
 
 from app.services.naming import render, validate_template
-from app.services.rules import apply_rules, validate_pattern
 from app.services.parser import ParsedMedia
+from app.services.rules import apply_rules, validate_pattern
 
 
 def test_render_movie():

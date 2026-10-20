@@ -50,7 +50,7 @@ def test_presets_seeded(client):
 def test_play_links_use_stream_url(client, lib_item):
     item_id, _ = lib_item
     data = links(client, item_id)
-    by_name = {l["name"]: l for l in data["links"]}
+    by_name = {x["name"]: x for x in data["links"]}
     assert by_name["PotPlayer"]["href"] == "potplayer://" + data["stream_url"]
     assert by_name["VLC"]["href"].startswith("vlc://http://")
     assert by_name["IINA"]["href"] == "iina://weblink?url=" + quote(
@@ -94,7 +94,7 @@ def test_regenerate_token_invalidates(client, lib_item):
 def test_playlist(client, lib_item):
     item_id, _ = lib_item
     data = links(client, item_id)
-    m3u = next(l for l in data["links"] if l["kind"] == "m3u")["href"]
+    m3u = next(x for x in data["links"] if x["kind"] == "m3u")["href"]
     res = client.get(stream_path(m3u))
     assert res.status_code == 200
     lines = res.text.splitlines()
@@ -164,7 +164,7 @@ def test_disabled_player_hidden(client, lib_item):
     item_id, _ = lib_item
     vlc = next(p for p in client.get("/api/players").json() if p["name"] == "VLC")
     client.put(f"/api/players/{vlc['id']}", json={**vlc, "enabled": False})
-    names = [l["name"] for l in links(client, item_id)["links"]]
+    names = [x["name"] for x in links(client, item_id)["links"]]
     assert "VLC" not in names and "PotPlayer" in names
 
 

@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from sqlmodel import Session
 
 from app import db
 from app.api.match import tmdb_client
@@ -7,7 +8,6 @@ from app.main import app
 from app.services import matcher
 from app.services.parser import ParsedMedia
 from app.services.tmdb import TmdbClient, TmdbError
-from sqlmodel import Session
 
 MOVIES = {
     "The Matrix": [

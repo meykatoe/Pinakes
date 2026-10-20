@@ -124,7 +124,7 @@ class Resolution:
 
 async def resolve(
     client: TmdbClient,
-    ai: "AiClient | None",
+    ai: AiClient | None,
     parsed: ParsedMedia,
     filename: str,
 ) -> Resolution:

@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 
 import httpx
-
 from sqlmodel import Session, select
 
 from app import db

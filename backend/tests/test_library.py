@@ -19,9 +19,13 @@ def test_paths_roundtrip(client, tmp_path):
 def test_paths_invalid(client, tmp_path):
     lib = tmp_path / "lib"
     lib.mkdir()
-    put = lambda i, b: client.put(
-        "/api/library/paths", json={"inbox_path": str(i), "library_path": str(b)}
-    )
+
+    def put(i, b):
+        return client.put(
+            "/api/library/paths",
+            json={"inbox_path": str(i), "library_path": str(b)},
+        )
+
     assert put(tmp_path / "missing", lib).status_code == 422
     assert put(lib, lib).status_code == 422
     assert put(lib / "sub", lib).status_code == 422
