@@ -8,10 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
-from sqlmodel import Session, select
+from sqlmodel import Session, col, delete, select
 
 from app.db import get_engine
-from app.models import SyncedFile
+from app.models import SyncedFile, SyncFailure
 from app.services import clients, organizer, settings_store, watcher
 from app.services.parser import VIDEO_EXTS
 from app.services.tmdb import TmdbError
@@ -124,6 +124,33 @@ async def refresh_mount(url: str) -> None:
         raise SyncError(f"rclone 更新失敗（HTTP {res.status_code}）")
 
 
+def _unseen(session: Session, rel: str, size: int, mtime: int) -> bool:
+    stmt = select(SyncFailure).where(
+        SyncFailure.rel_path == rel,
+        SyncFailure.size == size,
+        SyncFailure.mtime == mtime,
+    )
+    return session.exec(stmt).first() is None
+
+
+def settle_failures(
+    session: Session, failed: list[tuple[str, int, int, dict]], ok: list[str]
+) -> list[dict]:
+    if ok:
+        session.exec(delete(SyncFailure).where(col(SyncFailure.rel_path).in_(ok)))
+    fresh = []
+    for rel, size, mtime, result in failed:
+        if _unseen(session, rel, size, mtime):
+            session.add(
+                SyncFailure(
+                    rel_path=rel, size=size, mtime=mtime, error=result["error"]
+                )
+            )
+            fresh.append(result)
+    session.commit()
+    return fresh
+
+
 def _result(name: str, state: str, target: str = "", error: str = "") -> dict:
     return {
         "id": 0, "source": name, "status": state,
@@ -153,13 +180,17 @@ async def run_cycle(
         dest = inbox / rel
         part = dest.with_name(f".{dest.name}.part")
         if dest.exists() and dest.stat().st_size != size:
-            failed.append(_result(path.name, "failed", error="待整理目錄已有同名檔案"))
+            failed.append(
+                (rel, size, mtime, _result(path.name, "failed", error="待整理目錄已有同名檔案"))
+            )
             continue
         try:
             if not dest.exists():
                 await asyncio.to_thread(_copy, path, part)
         except OSError as exc:
-            failed.append(_result(path.name, "failed", error=f"複製失敗：{exc.strerror}"))
+            failed.append(
+                (rel, size, mtime, _result(path.name, "failed", error=f"複製失敗：{exc.strerror}"))
+            )
             continue
         copied.append((path, rel, size, mtime, dest, part))
 
@@ -194,7 +225,9 @@ async def run_cycle(
     status.last_count = len(results)
     if notes:
         status.last_error = "；".join(notes)
-    return results + failed
+    return results + settle_failures(
+        session, failed, [c[1] for c in copied]
+    )
 
 
 async def sync_once(session: Session) -> None:

@@ -194,3 +194,22 @@ def test_sync_once_sends_digest(client, env, monkeypatch):
 def test_status_api(client):
     data = client.get("/api/sync/status").json()
     assert data["enabled"] is False and data["busy"] is False
+
+
+def test_failure_notified_once(client, env):
+    inbox, lib, src, make_tmdb = env
+    client.put("/api/settings", json={"sync_auto_organize": False})
+    old_file(src / MATRIX, b"remote-data")
+    old_file(inbox / MATRIX, b"x")
+    assert [r["status"] for r in cycle(make_tmdb)] == ["failed"]
+    assert cycle(make_tmdb) == []
+    assert rclone_sync.status.last_failed == 1
+    old_file(src / MATRIX, b"remote-data-v2")
+    assert [r["status"] for r in cycle(make_tmdb)] == ["failed"]
+    (inbox / MATRIX).unlink()
+    assert [r["status"] for r in cycle(make_tmdb)] == ["synced"]
+    assert rclone_sync.status.last_failed == 0
+    (inbox / MATRIX).unlink()
+    old_file(inbox / MATRIX, b"y")
+    old_file(src / MATRIX, b"remote-data-version-3")
+    assert [r["status"] for r in cycle(make_tmdb)] == ["failed"]

@@ -118,3 +118,12 @@ class SyncedFile(SQLModel, table=True):
     mtime: int = 0
     dest_path: str = ""
     synced_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class SyncFailure(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    rel_path: str = Field(index=True)
+    size: int = 0
+    mtime: int = 0
+    error: str = ""
+    noticed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
