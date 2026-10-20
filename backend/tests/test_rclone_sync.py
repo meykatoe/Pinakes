@@ -213,3 +213,18 @@ def test_failure_notified_once(client, env):
     old_file(inbox / MATRIX, b"y")
     old_file(src / MATRIX, b"remote-data-version-3")
     assert [r["status"] for r in cycle(make_tmdb)] == ["failed"]
+
+
+def test_run_api_starts_and_finishes(client, env):
+    inbox, lib, src, make_tmdb = env
+    client.put("/api/settings", json={"sync_auto_organize": False})
+    old_file(src / MATRIX)
+    assert client.post("/api/sync/run").json() == {"started": True}
+    for _ in range(100):
+        data = client.get("/api/sync/status").json()
+        if not data["busy"]:
+            break
+        time.sleep(0.05)
+    assert not data["busy"] and data["last_run"] is not None
+    assert (inbox / MATRIX).exists()
+    assert client.post("/api/sync/run").json() == {"started": True}

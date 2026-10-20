@@ -37,5 +37,5 @@ def sync_status(session: Session = Depends(get_session)) -> SyncOut:
 
 
 @router.post("/sync/run")
-def sync_run() -> SyncRun:
+async def sync_run() -> SyncRun:
     return SyncRun(started=rclone_sync.trigger())

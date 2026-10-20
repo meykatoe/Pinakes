@@ -258,8 +258,8 @@ def trigger() -> bool:
         with Session(get_engine()) as session:
             await sync_once(session)
 
-    status.busy = True
     task = asyncio.create_task(go())
+    status.busy = True
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
     return True
