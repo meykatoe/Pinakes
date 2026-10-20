@@ -3,7 +3,8 @@ from sqlmodel import Session
 from app.models import Setting
 from app.security import decrypt, encrypt
 
-SECRET_KEYS = {"tmdb_api_key", "openai_api_key", "smtp_password", "stream_token"}
+SECRET_KEYS = {"tmdb_api_key", "openai_api_key", "smtp_password", "stream_token",
+               "telegram_token", "discord_webhook"}
 
 DEFAULTS = {
     "tmdb_api_key": "",
@@ -22,6 +23,11 @@ DEFAULTS = {
     "smtp_from": "",
     "notify_to": "",
     "notify_enabled": "false",
+    "telegram_enabled": "false",
+    "telegram_token": "",
+    "telegram_chat_id": "",
+    "discord_enabled": "false",
+    "discord_webhook": "",
     "watch_enabled": "false",
     "watch_interval": "30",
     "stable_seconds": "60",

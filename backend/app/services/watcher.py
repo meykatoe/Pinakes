@@ -9,7 +9,14 @@ from sqlmodel import Session
 
 from app.db import get_engine
 from app.models import MediaItem
-from app.services import clients, mailer, organizer, scraper, settings_store
+from app.services import (
+    chat_notify,
+    clients,
+    mailer,
+    organizer,
+    scraper,
+    settings_store,
+)
 from app.services.tmdb import TmdbError
 
 MIN_INTERVAL = 5
@@ -108,11 +115,13 @@ async def run_cycle(
 
 
 async def send_digest(session: Session, results: list[dict]) -> None:
+    errors = []
     try:
         await mailer.notify(session, results)
-        status.last_mail_error = ""
     except mailer.MailError as exc:
-        status.last_mail_error = str(exc)
+        errors.append(str(exc))
+    errors.extend(await chat_notify.notify(session, results))
+    status.last_mail_error = "；".join(errors)
 
 
 async def scrape_new(session: Session) -> None:

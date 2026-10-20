@@ -51,7 +51,7 @@ def load_config(session: Session) -> SmtpConfig:
     )
 
 
-def _line(item: dict) -> str:
+def line(item: dict) -> str:
     name = item.get("source", "")
     detail = item.get("target") or item.get("error") or item.get("reason") or ""
     return f"{name} -> {detail}" if detail else name
@@ -74,10 +74,10 @@ def build_digest(results: list[dict], cfg: SmtpConfig) -> EmailMessage:
     for status, items in groups.items():
         label = STATUS_TEXT.get(status, status)
         text.append(f"{label}（{len(items)}）")
-        text.extend(f"  {_line(i)}" for i in items)
+        text.extend(f"  {line(i)}" for i in items)
         text.append("")
         rows.append(f"<h3>{html.escape(label)}（{len(items)}）</h3><ul>")
-        rows.extend(f"<li>{html.escape(_line(i))}</li>" for i in items)
+        rows.extend(f"<li>{html.escape(line(i))}</li>" for i in items)
         rows.append("</ul>")
     if "pending_review" in groups:
         text.append("待確認的項目需要到 Pinakes 手動選擇。")

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session
 
 from app.db import get_session
-from app.services import connectivity, mailer, settings_store
+from app.services import chat_notify, connectivity, mailer, settings_store
 
 router = APIRouter(prefix="/settings")
 
@@ -42,6 +42,11 @@ class SettingsOut(BaseModel):
     smtp_from: str
     notify_to: str
     notify_enabled: bool
+    telegram_enabled: bool
+    telegram_token: str
+    telegram_chat_id: str
+    discord_enabled: bool
+    discord_webhook: str
 
 
 class SettingsIn(BaseModel):
@@ -72,6 +77,11 @@ class SettingsIn(BaseModel):
     smtp_from: str | None = None
     notify_to: str | None = None
     notify_enabled: bool | None = None
+    telegram_enabled: bool | None = None
+    telegram_token: str | None = None
+    telegram_chat_id: str | None = None
+    discord_enabled: bool | None = None
+    discord_webhook: str | None = None
 
     @field_validator("public_base_url")
     @classmethod
@@ -91,6 +101,13 @@ class SettingsIn(BaseModel):
         value = value.strip()
         if value and not (os.path.isfile(value) and os.access(value, os.X_OK)):
             raise ValueError("找不到可執行的 ffmpeg")
+        return value
+
+    @field_validator("discord_webhook")
+    @classmethod
+    def _webhook(cls, value: str | None) -> str | None:
+        if value and not chat_notify.WEBHOOK.match(value.strip()):
+            raise ValueError("Discord Webhook 網址格式錯誤")
         return value
 
     @field_validator("smtp_from", "notify_to")
@@ -118,7 +135,8 @@ def _build_out(session: Session) -> SettingsOut:
     for key in settings_store.SECRET_KEYS & data.keys():
         data[key] = _mask(data[key])
     data["ai_enabled"] = data["ai_enabled"] == "true"
-    for key in ("ai_auto_apply", "nfo_enabled", "nfo_images", "watch_enabled", "auto_execute", "notify_enabled"):
+    for key in ("ai_auto_apply", "nfo_enabled", "nfo_images", "watch_enabled", "auto_execute",
+                "notify_enabled", "telegram_enabled", "discord_enabled"):
         data[key] = data[key] == "true"
     for key, fallback in (
         ("ai_daily_limit", 200),
@@ -151,10 +169,12 @@ def update_settings(
 
 @router.post("/test/{target}")
 async def test_connection(
-    target: Literal["tmdb", "openai", "smtp"], session: Session = Depends(get_session)
+    target: Literal["tmdb", "openai", "smtp", "telegram", "discord"], session: Session = Depends(get_session)
 ) -> TestResult:
     if target == "smtp":
         ok, message = await mailer.send_test(session)
+    elif target in ("telegram", "discord"):
+        ok, message = await chat_notify.send_test(session, target)
     elif target == "tmdb":
         key = settings_store.get_value(session, "tmdb_api_key")
         ok, message = await connectivity.check_tmdb(key)
