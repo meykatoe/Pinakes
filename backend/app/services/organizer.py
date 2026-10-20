@@ -261,6 +261,12 @@ def _place_one(
     return True
 
 
+def _prune_sources(src: Path, companions: str, inbox: Path) -> None:
+    dirs = {src.parent, *(Path(c["src"]).parent for c in json.loads(companions))}
+    for folder in dirs:
+        fileops.prune_empty(folder, inbox)
+
+
 def execute_item(session: Session, item: MediaItem) -> MediaItem:
     with execute_lock:
         if item.status not in ("planned", "failed"):
@@ -286,6 +292,8 @@ def execute_item(session: Session, item: MediaItem) -> MediaItem:
                             policy, stamp, logs,
                         )
                 item.status, item.error = "done", ""
+                if item.mode == "move":
+                    _prune_sources(src, item.companions, inbox)
         except (FileOpError, OSError) as exc:
             _rollback(session, logs, library)
             item.status, item.error = "failed", str(exc)

@@ -98,12 +98,18 @@ def pending(
 
 
 def _copy(src: Path, part: Path) -> None:
-    part.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        shutil.copy2(src, part)
-    except OSError:
-        part.unlink(missing_ok=True)
-        raise
+    for attempt in (1, 2):
+        part.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(src, part)
+            return
+        except FileNotFoundError:
+            # 資料夾被清掉時重試
+            if attempt == 2 or not src.exists():
+                raise
+        except OSError:
+            part.unlink(missing_ok=True)
+            raise
 
 
 def make_client() -> httpx.AsyncClient:

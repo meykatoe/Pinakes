@@ -106,6 +106,42 @@ def test_move_mode_and_undo(client, env):
     assert src.read_bytes() == b"video" and not (lib / TARGET).exists()
 
 
+def test_move_prunes_empty_source_dirs(client, env):
+    inbox, lib, _ = env
+    client.put("/api/settings", json={"organize_mode": "move"})
+    folder = inbox / "劇集" / "合集"
+    make(folder, MATRIX)
+    make(folder, "The.Matrix.1999.1080p.BluRay.x264.zh-TW.srt", b"sub")
+    client.post("/api/organize/scan")
+    item = client.get("/api/organize/items").json()[0]
+    client.post(f"/api/organize/items/{item['id']}/execute")
+    assert (lib / TARGET).exists()
+    assert not (inbox / "劇集").exists() and inbox.is_dir()
+    client.post(f"/api/organize/items/{item['id']}/undo")
+    assert (folder / MATRIX).read_bytes() == b"video"
+
+
+def test_move_keeps_nonempty_source_dir(client, env):
+    inbox, lib, _ = env
+    client.put("/api/settings", json={"organize_mode": "move"})
+    folder = inbox / "合集"
+    make(folder, MATRIX)
+    make(folder, "readme.txt", b"keep")
+    client.post("/api/organize/scan")
+    item = client.get("/api/organize/items").json()[0]
+    client.post(f"/api/organize/items/{item['id']}/execute")
+    assert (folder / "readme.txt").exists()
+
+
+def test_hardlink_keeps_source_dir(client, env):
+    inbox, lib, _ = env
+    make(inbox / "合集", MATRIX)
+    client.post("/api/organize/scan")
+    item = client.get("/api/organize/items").json()[0]
+    client.post(f"/api/organize/items/{item['id']}/execute")
+    assert (inbox / "合集" / MATRIX).exists()
+
+
 def test_subtitles_follow(client, env):
     inbox, lib, _ = env
     make(inbox, MATRIX)
