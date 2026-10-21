@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,6 +18,13 @@ log = logging.getLogger("pinakes.cloud")
 
 class CloudMoveError(Exception):
     pass
+
+
+@dataclass
+class CloudResult:
+    moved: int = 0
+    # 檔名、錯誤、是否第一次失敗
+    failed: list[tuple[str, str, bool]] = field(default_factory=list)
 
 
 def normalize_fs(value: str) -> str:
@@ -110,7 +118,7 @@ async def _move_one(client, url, auth, source, library, rel: str, dst: str) -> N
     })
 
 
-def _record(session: Session, item_id: int, rel: str, dst: str, error: str) -> None:
+def _record(session: Session, item_id: int, rel: str, dst: str, error: str) -> bool:
     stmt = select(CloudMove).where(
         CloudMove.item_id == item_id, CloudMove.rel_path == rel
     )
@@ -120,31 +128,32 @@ def _record(session: Session, item_id: int, rel: str, dst: str, error: str) -> N
     row.tries = row.tries + 1 if error else row.tries
     session.add(row)
     session.commit()
+    return row.tries == 1
 
 
-async def process(session: Session, client=None) -> list[str]:
-    """把已整理項目在雲端對應的原檔搬到整理後路徑，回傳新的錯誤訊息。"""
+async def process(session: Session, client=None) -> CloudResult:
+    """把已整理項目在雲端對應的原檔搬到整理後路徑。"""
+    result = CloudResult()
     if settings_store.get_value(session, "cloud_move_enabled") != "true":
-        return []
+        return result
     url, source, library_fs, auth = load_config(session)
     _, library = organizer.get_roots(session)
     todo = plan(session, library)
     if not todo:
-        return []
-    errors, moved = [], 0
+        return result
     async with client or rclone_sync.make_client() as http:
         for item_id, rel, dst in todo:
             try:
                 await _move_one(http, url, auth, source, library_fs, rel, dst)
             except CloudMoveError as exc:
-                _record(session, item_id, rel, dst, str(exc))
-                errors.append(f"{Path(rel).name}：{exc}")
+                first = _record(session, item_id, rel, dst, str(exc))
+                result.failed.append((Path(rel).name, str(exc), first))
                 continue
             _record(session, item_id, rel, dst, "")
-            moved += 1
-        if moved:
+            result.moved += 1
+        if result.moved:
             try:
                 await _call(http, url, auth, "vfs/refresh", {"recursive": "true"})
             except CloudMoveError as exc:
                 log.warning("refresh after move failed: %s", exc)
-    return errors
+    return result

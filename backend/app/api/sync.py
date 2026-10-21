@@ -16,6 +16,8 @@ class SyncOut(BaseModel):
     last_error: str
     last_count: int
     last_failed: int
+    last_cloud_moved: int
+    last_cloud_failed: int
 
 
 class SyncRun(BaseModel):
@@ -33,6 +35,8 @@ def sync_status(session: Session = Depends(get_session)) -> SyncOut:
         last_error=st.last_error,
         last_count=st.last_count,
         last_failed=st.last_failed,
+        last_cloud_moved=st.last_cloud_moved,
+        last_cloud_failed=st.last_cloud_failed,
     )
 
 

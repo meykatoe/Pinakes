@@ -12,7 +12,7 @@ from sqlmodel import Session, col, delete, select
 
 from app.db import get_engine
 from app.models import SyncedFile, SyncFailure
-from app.services import clients, organizer, settings_store, watcher
+from app.services import clients, cloud_move, organizer, settings_store, watcher
 from app.services.parser import VIDEO_EXTS
 from app.services.tmdb import TmdbError
 
@@ -33,6 +33,8 @@ class SyncStatus:
     last_error: str = ""
     last_count: int = 0
     last_failed: int = 0
+    last_cloud_moved: int = 0
+    last_cloud_failed: int = 0
 
 
 status = SyncStatus()
@@ -245,6 +247,23 @@ async def run_cycle(
     )
 
 
+async def move_cloud(session: Session) -> None:
+    status.last_cloud_moved = status.last_cloud_failed = 0
+    try:
+        res = await cloud_move.process(session)
+    except cloud_move.CloudMoveError as exc:
+        status.last_error = "；".join(filter(None, [status.last_error, str(exc)]))
+        return
+    status.last_cloud_moved = res.moved
+    status.last_cloud_failed = len(res.failed)
+    fresh = [
+        _result(name, "failed", error=f"雲端整理失敗：{err}")
+        for name, err, first in res.failed if first
+    ]
+    if fresh:
+        await watcher.send_digest(session, fresh)
+
+
 async def sync_once(session: Session) -> None:
     status.busy = True
     try:
@@ -260,6 +279,11 @@ async def sync_once(session: Session) -> None:
     except Exception as exc:  # noqa: BLE001
         log.exception("sync cycle failed")
         status.last_error = f"未預期錯誤：{exc.__class__.__name__}"
+    try:
+        await move_cloud(session)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("cloud move failed")
+        status.last_error = f"雲端整理未預期錯誤：{exc.__class__.__name__}"
     finally:
         status.busy = False
         status.last_run = time.time()
