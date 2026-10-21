@@ -4,10 +4,15 @@ import os
 import shutil
 from pathlib import Path
 
+from sqlmodel import Session
+
 from app.config import settings
-from app.services import hwaccel, transcode
+from app.db import get_engine
+from app.models import MediaItem
+from app.services import fileops, hwaccel, organizer, settings_store, transcode
 
 queue: asyncio.Queue | None = None
+loop: asyncio.AbstractEventLoop | None = None
 queued: set[int] = set()
 current: int | None = None
 
@@ -33,6 +38,41 @@ def is_cached(item_id: int, path: Path) -> bool:
         return saved == _stamp(path) and (cache_dir(item_id) / "index.m3u8").is_file()
     except (OSError, ValueError):
         return False
+
+
+def touch(item_id: int) -> None:
+    """記錄最近播放時間。"""
+    try:
+        os.utime(cache_dir(item_id) / "meta.json")
+    except OSError:
+        pass
+
+
+def _entries() -> list[tuple[float, int, int]]:
+    rows = []
+    for folder in cache_root().glob("*"):
+        meta = folder / "meta.json"
+        if not folder.name.isdigit() or not meta.is_file():
+            continue
+        size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+        rows.append((meta.stat().st_mtime, int(folder.name), size))
+    return sorted(rows)
+
+
+def evict(max_bytes: int, keep: int | None = None) -> int:
+    """超過容量時，由最久沒看的開始清除。"""
+    rows = _entries()
+    total = sum(size for _, _, size in rows)
+    removed = 0
+    for _, item_id, size in rows:
+        if total <= max_bytes:
+            break
+        if item_id == keep:
+            continue
+        remove(item_id)
+        total -= size
+        removed += 1
+    return removed
 
 
 def remove(item_id: int) -> None:
@@ -89,6 +129,13 @@ async def precache(
     return True
 
 
+def request(session: Session, item_id: int) -> None:
+    """整理完成後排入預轉碼，可在其他執行緒呼叫。"""
+    if loop is None or settings_store.get_value(session, "precache_enabled") != "true":
+        return
+    loop.call_soon_threadsafe(enqueue, item_id)
+
+
 def enqueue(item_id: int) -> bool:
     if queue is None or item_id in queued:
         return False
@@ -97,10 +144,42 @@ def enqueue(item_id: int) -> bool:
     return True
 
 
-async def worker(run) -> None:
-    """依序處理佇列，run 負責取得路徑並轉碼。"""
-    global queue, current
+def _prepare(item_id: int) -> tuple[str, str, Path, str, int] | None:
+    with Session(get_engine()) as session:
+        item = session.get(MediaItem, item_id)
+        binaries = transcode.find_binaries(session)
+        if item is None or item.status != "done" or not item.target_path or not binaries:
+            return None
+        try:
+            _, library = organizer.get_roots(session)
+            path = Path(item.target_path)
+            fileops.ensure_within(path, library)
+        except (organizer.OrganizeError, fileops.FileOpError):
+            return None
+        if not path.is_file():
+            return None
+        try:
+            gb = float(settings_store.get_value(session, "precache_max_gb"))
+        except ValueError:
+            gb = 50
+        pref = settings_store.get_value(session, "hwaccel")
+        return binaries[0], binaries[1], path, pref, int(gb * 1024**3)
+
+
+async def run_item(item_id: int) -> None:
+    prepared = await asyncio.to_thread(_prepare, item_id)
+    if prepared is None:
+        return
+    ffmpeg, ffprobe, path, pref, max_bytes = prepared
+    if await precache(ffmpeg, ffprobe, item_id, path, pref):
+        await asyncio.to_thread(evict, max_bytes, item_id)
+
+
+async def worker(run=run_item) -> None:
+    """依序處理佇列。"""
+    global queue, current, loop
     queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
     try:
         while True:
             item_id = await queue.get()
@@ -116,4 +195,5 @@ async def worker(run) -> None:
                 current = None
     finally:
         queue = None
+        loop = None
         queued.clear()

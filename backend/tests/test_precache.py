@@ -47,3 +47,38 @@ def test_bad_file_leaves_nothing(tmp_path):
     with pytest.raises(transcode.TranscodeError):
         asyncio.run(precache.precache("ffmpeg", "ffprobe", 4, src))
     assert not precache.cache_dir(4).exists()
+
+
+def test_evict_oldest_first(tmp_path):
+    import os
+
+    for item_id, age in ((1, 100), (2, 200), (3, 300)):
+        folder = precache.cache_dir(item_id)
+        folder.mkdir(parents=True)
+        (folder / "seg_00000.ts").write_bytes(b"x" * 100)
+        meta = folder / "meta.json"
+        meta.write_text("{}")
+        os.utime(meta, (1000 + age, 1000 + age))
+    assert precache.evict(250, keep=1) == 1
+    assert precache.cache_dir(1).exists() and not precache.cache_dir(2).exists()
+    assert precache.cache_dir(3).exists()
+
+
+def test_request_ignored_when_disabled(client):
+    from sqlmodel import Session
+
+    from app.db import get_engine
+
+    with Session(get_engine()) as session:
+        precache.request(session, 1)
+    assert precache.queued == set()
+
+
+def test_settings_roundtrip(client):
+    r = client.put(
+        "/api/settings",
+        json={"precache_enabled": True, "precache_max_gb": 20, "hwaccel": "off"},
+    )
+    body = r.json()
+    assert body["precache_enabled"] is True and body["precache_max_gb"] == 20
+    assert body["hwaccel"] == "off"

@@ -10,7 +10,15 @@ from pathlib import Path
 from sqlmodel import Session, col, select
 
 from app.models import Category, MediaItem, OperationLog
-from app.services import fileops, matcher, naming, nfo, pipeline, settings_store
+from app.services import (
+    fileops,
+    matcher,
+    naming,
+    nfo,
+    pipeline,
+    precache,
+    settings_store,
+)
 from app.services.fileops import FileOpError
 from app.services.parser import VIDEO_EXTS
 from app.services.tmdb import TmdbClient
@@ -300,6 +308,8 @@ def execute_item(session: Session, item: MediaItem) -> MediaItem:
         item.updated_at = _now()
         session.add(item)
         session.commit()
+        if item.status == "done":
+            precache.request(session, item.id)
         return item
 
 

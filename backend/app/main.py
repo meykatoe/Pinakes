@@ -26,7 +26,7 @@ from app.api import (
 from app.api import settings as settings_api
 from app.config import settings
 from app.db import get_engine, init_db
-from app.services import auth, rclone_sync, transcode, watcher
+from app.services import auth, precache, rclone_sync, transcode, watcher
 from app.web import mount_frontend
 
 # 免登入路徑
@@ -38,13 +38,15 @@ async def lifespan(_: FastAPI):
     init_db()
     if settings.watch_loop:
         reaper = asyncio.create_task(transcode.reaper())
+        cacher = asyncio.create_task(precache.worker())
         try:
             async with watcher.background(), rclone_sync.background():
                 yield
         finally:
-            reaper.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await reaper
+            for task in (reaper, cacher):
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
     else:
         yield
 

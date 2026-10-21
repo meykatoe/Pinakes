@@ -34,6 +34,9 @@ class SettingsOut(BaseModel):
     conflict_policy: str
     public_base_url: str
     ffmpeg_path: str
+    hwaccel: str
+    precache_enabled: bool
+    precache_max_gb: int
     smtp_host: str
     smtp_port: int
     smtp_user: str
@@ -74,6 +77,9 @@ class SettingsIn(BaseModel):
     conflict_policy: Literal["skip", "overwrite", "keep_larger"] | None = None
     public_base_url: str | None = None
     ffmpeg_path: str | None = None
+    hwaccel: Literal["auto", "off", "nvenc", "vaapi", "qsv"] | None = None
+    precache_enabled: bool | None = None
+    precache_max_gb: int | None = Field(default=None, ge=1)
     smtp_host: str | None = None
     smtp_port: int | None = Field(default=None, ge=1, le=65535)
     smtp_user: str | None = None
@@ -167,7 +173,7 @@ def _build_out(session: Session) -> SettingsOut:
     data["ai_enabled"] = data["ai_enabled"] == "true"
     for key in ("ai_auto_apply", "nfo_enabled", "nfo_images", "watch_enabled", "auto_execute",
                 "notify_enabled", "telegram_enabled", "discord_enabled",
-                "sync_enabled", "sync_auto_organize"):
+                "sync_enabled", "sync_auto_organize", "precache_enabled"):
         data[key] = data[key] == "true"
     for key, fallback in (
         ("ai_daily_limit", 200),
@@ -175,6 +181,7 @@ def _build_out(session: Session) -> SettingsOut:
         ("sync_interval", 30),
         ("stable_seconds", 60),
         ("smtp_port", 587),
+        ("precache_max_gb", 50),
     ):
         try:
             data[key] = int(data[key])

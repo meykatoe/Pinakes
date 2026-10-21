@@ -15,6 +15,8 @@ DEFAULTS = {
     "stream_token": "",
     "ffmpeg_path": "",
     "hwaccel": "auto",
+    "precache_enabled": "false",
+    "precache_max_gb": "50",
     "public_base_url": "",
     "smtp_host": "",
     "smtp_port": "587",
