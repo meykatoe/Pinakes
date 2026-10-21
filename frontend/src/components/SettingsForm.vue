@@ -6,6 +6,7 @@ import {
   type PrecacheStatus, type Settings, type SyncStatus,
 } from '../api'
 import { relativeTime } from '../format'
+import { confirm } from '../ui/confirm'
 import { toast, toastError } from '../ui/toast'
 import DirPicker from './DirPicker.vue'
 
@@ -25,7 +26,8 @@ const FIELDS: Record<Section, Key[]> = {
   ],
   sync: [
     'sync_enabled', 'sync_source_path', 'sync_interval', 'sync_auto_organize',
-    'sync_rc_url',
+    'sync_rc_url', 'sync_rc_user', 'sync_rc_pass', 'cloud_move_enabled',
+    'cloud_source_fs', 'cloud_library_fs',
   ],
   playback: [
     'public_base_url', 'ffmpeg_path', 'hwaccel', 'precache_enabled', 'precache_max_gb',
@@ -38,7 +40,7 @@ const FIELDS: Record<Section, Key[]> = {
 }
 const SECRETS: Key[] = [
   'tmdb_api_key', 'openai_api_key', 'smtp_password', 'telegram_token',
-  'discord_webhook',
+  'discord_webhook', 'sync_rc_pass',
 ]
 
 const saved = ref<Settings | null>(null)
@@ -150,6 +152,19 @@ async function syncNow() {
 }
 
 async function save() {
+  if (
+    props.section === 'sync' &&
+    form.cloud_move_enabled &&
+    !saved.value?.cloud_move_enabled &&
+    !(await confirm(
+      '啟用後，整理成功的檔案會在雲端被搬移並改名，雲端原本位置將不再有原檔，且無法自動還原。確定要啟用？',
+      '啟用雲端整理',
+      true,
+    ))
+  ) {
+    form.cloud_move_enabled = false
+    return
+  }
   const body: Partial<Settings> = {}
   for (const key of FIELDS[props.section]) {
     if (SECRETS.includes(key) && !form[key]) continue
@@ -440,6 +455,17 @@ async function test(target: Parameters<typeof testConnection>[0]) {
             <input v-model="form.sync_rc_url" class="input mono" placeholder="http://127.0.0.1:5572" />
             <p class="hint">選填。掛載時加 --rc，每次同步前會先刷新目錄快取</p>
           </label>
+          <label class="field">
+            <span>rclone 遠端控制帳號</span>
+            <input v-model="form.sync_rc_user" class="input" autocomplete="off" placeholder="未設定則留空" />
+          </label>
+          <label class="field">
+            <span>rclone 遠端控制密碼</span>
+            <input
+              v-model="form.sync_rc_pass" class="input" type="password"
+              autocomplete="new-password" :placeholder="saved.sync_rc_pass || '未設定則留空'"
+            />
+          </label>
           <label class="check full">
             <input v-model="form.sync_auto_organize" type="checkbox" />
             <span>
@@ -450,6 +476,39 @@ async function test(target: Parameters<typeof testConnection>[0]) {
             </span>
           </label>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>雲端整理</h2>
+          <span v-if="saved.cloud_move_enabled" class="badge ok">已啟用</span>
+        </div>
+        <p class="hint intro">
+          本地整理成功後，透過 rclone 遠端控制在雲端同步搬移並改名原檔，結構與本地媒體庫一致。
+          搬移在雲端內部完成，不會經過本機下載；已搬移的檔案不會再被同步。
+        </p>
+        <p class="warn-text hint intro">
+          此功能會移動雲端原檔，原位置不再保留，且無法自動還原。建議先用少量檔案測試。
+        </p>
+        <div class="form-grid">
+          <label class="check full">
+            <input v-model="form.cloud_move_enabled" type="checkbox" />
+            <span>
+              整理後在雲端搬移改名原檔
+              <p class="hint">需先填入上方的 rclone 遠端控制網址，並隨每次同步執行</p>
+            </span>
+          </label>
+          <label class="field">
+            <span>雲端來源（對應掛載的來源資料夾）</span>
+            <input v-model="form.cloud_source_fs" class="input mono" placeholder="pikpak:/downloads" />
+            <p class="hint">格式為「遠端名稱:路徑」，須與上方的來源資料夾是同一個位置</p>
+          </label>
+          <label class="field">
+            <span>雲端媒體庫（整理後存放位置）</span>
+            <input v-model="form.cloud_library_fs" class="input mono" placeholder="pikpak:/Media" />
+            <p class="hint">請與雲端來源使用同一個遠端，且不可位於來源資料夾內</p>
+          </label>
+        </div>
         <div class="row test">
           <button type="button" class="btn sm" :disabled="syncing" @click="syncNow">
             <span v-if="syncing" class="spin"></span>
@@ -458,6 +517,10 @@ async function test(target: Parameters<typeof testConnection>[0]) {
           <span v-if="sync?.last_run" class="muted">
             上次同步 {{ relativeTime(sync.last_run) }}，處理 {{ sync.last_count }} 個
             <template v-if="sync.last_failed">，失敗 {{ sync.last_failed }} 個</template>
+            <template v-if="sync.last_cloud_moved || sync.last_cloud_failed">
+              ；雲端整理 {{ sync.last_cloud_moved }} 個
+              <template v-if="sync.last_cloud_failed">，失敗 {{ sync.last_cloud_failed }} 個</template>
+            </template>
           </span>
           <span v-if="sync?.last_error" class="danger-text">{{ sync.last_error }}</span>
         </div>

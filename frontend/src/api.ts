@@ -38,6 +38,11 @@ export interface Settings {
   sync_interval: number
   sync_auto_organize: boolean
   sync_rc_url: string
+  sync_rc_user: string
+  sync_rc_pass: string
+  cloud_move_enabled: boolean
+  cloud_source_fs: string
+  cloud_library_fs: string
 }
 
 export interface TestResult {
@@ -291,6 +296,8 @@ export interface SyncStatus {
   last_error: string
   last_count: number
   last_failed: number
+  last_cloud_moved: number
+  last_cloud_failed: number
 }
 
 export interface PrecacheStatus {
