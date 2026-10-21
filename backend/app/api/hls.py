@@ -10,7 +10,7 @@ from sqlmodel import Session
 
 from app.api.play import base_url, playable_item, stream_url
 from app.db import get_session
-from app.services import hwaccel, player, settings_store, transcode
+from app.services import hwaccel, player, precache, settings_store, transcode
 
 router = APIRouter()
 
@@ -33,6 +33,7 @@ class HlsOut(BaseModel):
     session_id: str | None = None
     playlist_url: str | None = None
     direct_url: str | None = None
+    cached: bool = False
 
 
 @router.get("/transcode/status")
@@ -70,6 +71,12 @@ async def start_hls(
                 base_url(request, session), item_id, path.name, player.get_token(session)
             )
             return HlsOut(mode=mode, duration=duration, direct_url=url)
+        if precache.is_cached(item_id, path):
+            precache.touch(item_id)
+            return HlsOut(
+                mode=mode, duration=duration, cached=True,
+                playlist_url=f"/api/hls/cache/{item_id}/index.m3u8",
+            )
         sess = await transcode.start_session(
             ffmpeg, item_id, path, mode, audio_mode, start,
             settings_store.get_value(session, "hwaccel"),
@@ -89,6 +96,22 @@ def _session(sid: str) -> transcode.HlsSession:
     if sess is None:
         raise HTTPException(404, "播放工作階段不存在或已結束")
     return sess
+
+
+@router.get("/hls/cache/{item_id}/{name}")
+def cache_file(item_id: int, name: str) -> FileResponse:
+    if not NAME.match(name):
+        raise HTTPException(404, "檔案不存在")
+    path = precache.cache_dir(item_id) / name
+    if not path.is_file():
+        raise HTTPException(404, "檔案不存在")
+    if name.endswith(".m3u8"):
+        precache.touch(item_id)
+        return FileResponse(
+            path, media_type="application/vnd.apple.mpegurl",
+            headers={"Cache-Control": "no-store"},
+        )
+    return FileResponse(path, media_type="video/mp2t")
 
 
 @router.get("/hls/{sid}/{name}")

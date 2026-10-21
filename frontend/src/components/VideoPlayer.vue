@@ -23,6 +23,7 @@ const modeText: Record<string, string> = {
   remux: '轉封裝',
   transcode: '即時轉碼',
 }
+const cachedText = '已預轉碼'
 let hls: Hls | null = null
 let sessionId: string | null = null
 let keepTimer: number | undefined
@@ -30,7 +31,9 @@ let saveTimer: number | undefined
 let generation = 0
 
 const duration = computed(() => info.value?.duration ?? 0)
-const custom = computed(() => !!info.value && info.value.mode !== 'direct' && duration.value > 0)
+const custom = computed(
+  () => !!info.value && info.value.mode !== 'direct' && !info.value.cached && duration.value > 0,
+)
 
 function absolute(): number {
   return offset.value + (video.value?.currentTime ?? 0)
@@ -67,13 +70,16 @@ async function begin(start: number) {
       }
       return
     }
-    offset.value = start
+    offset.value = data.cached ? 0 : start
     sessionId = data.session_id
     const url = data.playlist_url as string
     const { default: HlsLib } = await import('hls.js')
     if (gen !== generation) return
     if (HlsLib.isSupported()) {
-      hls = new HlsLib({ maxBufferLength: 60 })
+      hls = new HlsLib({
+        maxBufferLength: 60,
+        startPosition: data.cached && start > 0 ? start : -1,
+      })
       hls.on(HlsLib.Events.ERROR, (_, d) => {
         if (d.fatal) {
           error.value = `播放失敗：${d.details}`
@@ -208,7 +214,7 @@ onUnmounted(() => {
     <div class="player" role="dialog" aria-modal="true" :aria-label="title">
       <div class="head">
         <strong>{{ title }}</strong>
-        <span v-if="info" class="mode">{{ modeText[info.mode] ?? info.mode }}</span>
+        <span v-if="info" class="mode">{{ info.cached ? cachedText : (modeText[info.mode] ?? info.mode) }}</span>
         <button type="button" class="x" aria-label="關閉" @click="emit('close')">✕</button>
       </div>
       <div class="stage">

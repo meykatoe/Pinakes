@@ -382,6 +382,7 @@ export interface HlsInfo {
   session_id: string | null
   playlist_url: string | null
   direct_url: string | null
+  cached?: boolean
 }
 
 export const getTranscodeStatus = () =>

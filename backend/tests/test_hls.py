@@ -197,3 +197,24 @@ def test_decide_rules():
     assert transcode.decide({"streams": [hevc, aac]}, ".mp4")[0] == "transcode"
     with pytest.raises(transcode.TranscodeError):
         transcode.decide({"streams": [aac]}, ".mp4")
+
+
+def test_cached_item_skips_session(client, lib, tmp_path, monkeypatch):
+    import asyncio
+
+    from app.config import settings
+    from app.services import precache
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path / "data")
+    f = lib / "c.mkv"
+    make_video(f, vcodec="mpeg4")
+    item_id = add_item(f)
+    asyncio.run(precache.precache("ffmpeg", "ffprobe", item_id, f))
+    res = start(client, item_id, start=3).json()
+    assert res["cached"] is True and res["session_id"] is None
+    assert not transcode.sessions
+    playlist = client.get(res["playlist_url"])
+    assert playlist.status_code == 200 and "#EXT-X-ENDLIST" in playlist.text
+    seg = client.get(f"/api/hls/cache/{item_id}/seg_00000.ts")
+    assert seg.status_code == 200 and seg.content[0] == 0x47
+    assert client.get(f"/api/hls/cache/{item_id}/..%2Fmeta.json").status_code == 404
