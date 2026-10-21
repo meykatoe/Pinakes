@@ -4,7 +4,7 @@ from app.models import Setting
 from app.security import decrypt, encrypt
 
 SECRET_KEYS = {"tmdb_api_key", "openai_api_key", "smtp_password", "stream_token",
-               "telegram_token", "discord_webhook"}
+               "telegram_token", "discord_webhook", "sync_rc_pass"}
 
 DEFAULTS = {
     "tmdb_api_key": "",
@@ -36,6 +36,11 @@ DEFAULTS = {
     "sync_interval": "30",
     "sync_auto_organize": "true",
     "sync_rc_url": "",
+    "sync_rc_user": "",
+    "sync_rc_pass": "",
+    "cloud_move_enabled": "false",
+    "cloud_source_fs": "",
+    "cloud_library_fs": "",
     "watch_enabled": "false",
     "watch_interval": "30",
     "stable_seconds": "60",

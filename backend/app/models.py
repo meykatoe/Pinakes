@@ -120,6 +120,19 @@ class SyncedFile(SQLModel, table=True):
     synced_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class CloudMove(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    item_id: int = Field(index=True)
+    # 相對於雲端來源
+    rel_path: str = Field(index=True)
+    dst: str = ""
+    # done 或 failed
+    status: str = "failed"
+    error: str = ""
+    tries: int = 0
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class SyncFailure(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     rel_path: str = Field(index=True)

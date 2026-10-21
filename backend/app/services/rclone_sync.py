@@ -116,13 +116,20 @@ def make_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=RC_TIMEOUT)
 
 
-async def refresh_mount(url: str) -> None:
+def rc_auth(session: Session) -> httpx.BasicAuth | None:
+    user = settings_store.get_value(session, "sync_rc_user")
+    if not user:
+        return None
+    return httpx.BasicAuth(user, settings_store.get_value(session, "sync_rc_pass"))
+
+
+async def refresh_mount(url: str, auth: httpx.BasicAuth | None = None) -> None:
     if not url:
         return
     async with make_client() as client:
         try:
             res = await client.post(
-                f"{url.rstrip('/')}/vfs/refresh", json={"recursive": "true"}
+                f"{url.rstrip('/')}/vfs/refresh", json={"recursive": "true"}, auth=auth
             )
         except httpx.HTTPError as exc:
             raise SyncError(f"rclone 更新失敗：{exc.__class__.__name__}") from exc
@@ -176,7 +183,9 @@ async def run_cycle(
     notes = []
     status.last_error = ""
     try:
-        await refresh_mount(settings_store.get_value(session, "sync_rc_url"))
+        await refresh_mount(
+            settings_store.get_value(session, "sync_rc_url"), rc_auth(session)
+        )
     except SyncError as exc:
         notes.append(str(exc))
     todo = await asyncio.to_thread(pending, session, source, now, min_age)

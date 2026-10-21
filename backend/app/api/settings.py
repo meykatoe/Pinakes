@@ -2,12 +2,12 @@ import os
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session
 
 from app.db import get_session
-from app.services import chat_notify, connectivity, mailer, settings_store
+from app.services import chat_notify, cloud_move, connectivity, mailer, settings_store
 
 router = APIRouter(prefix="/settings")
 
@@ -55,6 +55,11 @@ class SettingsOut(BaseModel):
     sync_interval: int
     sync_auto_organize: bool
     sync_rc_url: str
+    sync_rc_user: str
+    sync_rc_pass: str
+    cloud_move_enabled: bool
+    cloud_source_fs: str
+    cloud_library_fs: str
 
 
 class SettingsIn(BaseModel):
@@ -98,6 +103,11 @@ class SettingsIn(BaseModel):
     sync_interval: int | None = Field(default=None, ge=1)
     sync_auto_organize: bool | None = None
     sync_rc_url: str | None = None
+    sync_rc_user: str | None = None
+    sync_rc_pass: str | None = None
+    cloud_move_enabled: bool | None = None
+    cloud_source_fs: str | None = None
+    cloud_library_fs: str | None = None
 
     @field_validator("public_base_url")
     @classmethod
@@ -139,6 +149,16 @@ class SettingsIn(BaseModel):
             raise ValueError("網址必須是 http:// 或 https:// 開頭")
         return value
 
+    @field_validator("cloud_source_fs", "cloud_library_fs")
+    @classmethod
+    def _cloud_fs(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = cloud_move.normalize_fs(value)
+        if value and not cloud_move.FS.match(value):
+            raise ValueError("格式應為「遠端名稱:路徑」，例如 pikpak:/Media")
+        return value
+
     @field_validator("discord_webhook")
     @classmethod
     def _webhook(cls, value: str | None) -> str | None:
@@ -173,7 +193,8 @@ def _build_out(session: Session) -> SettingsOut:
     data["ai_enabled"] = data["ai_enabled"] == "true"
     for key in ("ai_auto_apply", "nfo_enabled", "nfo_images", "watch_enabled", "auto_execute",
                 "notify_enabled", "telegram_enabled", "discord_enabled",
-                "sync_enabled", "sync_auto_organize", "precache_enabled"):
+                "sync_enabled", "sync_auto_organize", "precache_enabled",
+                "cloud_move_enabled"):
         data[key] = data[key] == "true"
     for key, fallback in (
         ("ai_daily_limit", 200),
@@ -199,7 +220,12 @@ def read_settings(session: Session = Depends(get_session)) -> SettingsOut:
 def update_settings(
     body: SettingsIn, session: Session = Depends(get_session)
 ) -> SettingsOut:
-    for key, value in body.model_dump(exclude_none=True).items():
+    changes = body.model_dump(exclude_none=True)
+    source = changes.get("cloud_source_fs", settings_store.get_value(session, "cloud_source_fs"))
+    target = changes.get("cloud_library_fs", settings_store.get_value(session, "cloud_library_fs"))
+    if source and target and cloud_move.overlaps(source, target):
+        raise HTTPException(422, "雲端媒體庫不可與雲端來源互相包含")
+    for key, value in changes.items():
         if isinstance(value, bool):
             value = "true" if value else "false"
         settings_store.set_value(session, key, str(value).strip())
