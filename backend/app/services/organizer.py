@@ -327,7 +327,7 @@ def _hand_over(session: Session, item: MediaItem, log: OperationLog) -> bool:
     # 共用檔轉給同目錄其他項目
     if Path(log.dst).name not in nfo.SHARED:
         return False
-    prefix = str(Path(log.dst).parent) + "/"
+    prefix = str(Path(log.dst).parent) + os.sep
     stmt = select(MediaItem).where(
         MediaItem.status == "done",
         MediaItem.id != item.id,

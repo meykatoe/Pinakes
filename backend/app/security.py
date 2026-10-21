@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 from functools import lru_cache
 
@@ -12,7 +13,8 @@ def _key() -> bytes:
     path = settings.data_dir / "secret.key"
     if not path.exists():
         path.write_bytes(Fernet.generate_key())
-        path.chmod(0o600)
+        with contextlib.suppress(OSError):
+            path.chmod(0o600)
     return path.read_bytes()
 
 

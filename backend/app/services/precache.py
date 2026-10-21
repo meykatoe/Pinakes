@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 from sqlmodel import Session
@@ -83,6 +85,13 @@ def _lower_priority() -> None:
     os.nice(10)
 
 
+def _priority_args() -> dict:
+    """各平台降低程序優先權的參數。"""
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
+    return {"preexec_fn": _lower_priority}
+
+
 async def precache(
     ffmpeg: str, ffprobe: str, item_id: int, path: Path, hw_pref: str = "off",
 ) -> bool:
@@ -105,7 +114,7 @@ async def precache(
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.DEVNULL, stderr=log,
-                preexec_fn=_lower_priority,
+                **_priority_args(),
             )
             try:
                 code = await proc.wait()

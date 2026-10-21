@@ -3,7 +3,6 @@ import json
 import os
 import secrets
 import shutil
-import signal
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -228,7 +227,7 @@ async def stop_all() -> None:
 def kill_all_sync() -> None:
     for sess in list(sessions.values()):
         try:
-            os.kill(sess.proc.pid, signal.SIGKILL)
+            sess.proc.kill()
         except OSError:
             pass
         shutil.rmtree(sess.dir, ignore_errors=True)
