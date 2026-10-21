@@ -15,7 +15,7 @@ import { toast, toastError } from '../ui/toast'
 
 const players = ref<Player[]>([])
 const original = ref<Record<number, string>>({})
-const ffmpeg = ref<{ available: boolean; ffmpeg: string | null } | null>(null)
+const ffmpeg = ref<{ available: boolean; ffmpeg: string | null; hwaccel: string | null } | null>(null)
 const draft = reactive<PlayerInput>({
   name: '',
   kind: 'link',

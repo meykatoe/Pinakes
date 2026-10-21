@@ -17,6 +17,9 @@ export interface Settings {
   conflict_policy: string
   public_base_url: string
   ffmpeg_path: string
+  hwaccel: string
+  precache_enabled: boolean
+  precache_max_gb: number
   smtp_host: string
   smtp_port: number
   smtp_user: string
@@ -386,7 +389,10 @@ export interface HlsInfo {
 }
 
 export const getTranscodeStatus = () =>
-  send<{ available: boolean; ffmpeg: string | null }>('/api/transcode/status', 'GET')
+  send<{ available: boolean; ffmpeg: string | null; hwaccel: string | null }>(
+    '/api/transcode/status',
+    'GET',
+  )
 
 export const startHls = (itemId: number, start = 0) =>
   send<HlsInfo>(`/api/play/${itemId}/hls`, 'POST', { start })

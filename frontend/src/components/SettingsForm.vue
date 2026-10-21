@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import {
-  getSettings, getSyncStatus, rebuildNfo, runSync, saveSettings, testConnection,
+  getSettings, getSyncStatus, getTranscodeStatus, rebuildNfo, runSync, saveSettings,
+  testConnection,
   type Settings, type SyncStatus,
 } from '../api'
 import { relativeTime } from '../format'
@@ -26,7 +27,9 @@ const FIELDS: Record<Section, Key[]> = {
     'sync_enabled', 'sync_source_path', 'sync_interval', 'sync_auto_organize',
     'sync_rc_url',
   ],
-  playback: ['public_base_url', 'ffmpeg_path'],
+  playback: [
+    'public_base_url', 'ffmpeg_path', 'hwaccel', 'precache_enabled', 'precache_max_gb',
+  ],
   notify: [
     'notify_enabled', 'notify_to', 'smtp_host', 'smtp_port', 'smtp_security',
     'smtp_user', 'smtp_password', 'smtp_from', 'telegram_enabled',
@@ -59,6 +62,13 @@ function fill(data: Settings) {
   }
 }
 
+const gpu = ref<string | null | undefined>(undefined)
+const GPU_NAMES: Record<string, string> = {
+  nvenc: 'NVIDIA NVENC',
+  vaapi: 'VAAPI',
+  qsv: 'Intel Quick Sync',
+}
+
 const sync = ref<SyncStatus | null>(null)
 const syncing = ref(false)
 let timer: ReturnType<typeof setInterval> | undefined
@@ -76,6 +86,11 @@ onMounted(async () => {
   try {
     fill(await getSettings())
     if (props.section === 'sync') await loadSync()
+    if (props.section === 'playback') {
+      getTranscodeStatus()
+        .then((r) => (gpu.value = r.available ? r.hwaccel : undefined))
+        .catch(() => undefined)
+    }
   } catch (err) {
     toastError(err)
   }
@@ -431,6 +446,36 @@ async function test(target: Parameters<typeof testConnection>[0]) {
             <span>ffmpeg 路徑</span>
             <input v-model="form.ffmpeg_path" class="input mono" placeholder="/usr/bin/ffmpeg" />
             <p class="hint">內建播放器轉碼用，留空則從系統 PATH 尋找，ffprobe 需在同一目錄</p>
+          </label>
+          <label class="field">
+            <span>
+              硬體加速
+              <span v-if="gpu !== undefined" class="badge" :class="gpu ? 'ok' : ''">
+                {{ gpu ? `使用 ${GPU_NAMES[gpu] ?? gpu}` : '未偵測到 GPU' }}
+              </span>
+            </span>
+            <select v-model="form.hwaccel" class="input">
+              <option value="auto">自動偵測</option>
+              <option value="off">關閉（使用 CPU）</option>
+              <option value="nvenc">NVIDIA NVENC</option>
+              <option value="vaapi">VAAPI</option>
+              <option value="qsv">Intel Quick Sync</option>
+            </select>
+            <p class="hint">儲存後重新整理頁面可看到偵測結果；偵測不到時自動改用 CPU</p>
+          </label>
+          <label class="check full">
+            <input v-model="form.precache_enabled" type="checkbox" />
+            <span>
+              整理後自動預轉碼
+              <p class="hint">
+                瀏覽器無法直接播放的檔案，整理完成後在背景轉好，播放時不必等待
+              </p>
+            </span>
+          </label>
+          <label class="field">
+            <span>預轉碼快取上限（GB）</span>
+            <input v-model.number="form.precache_max_gb" class="input" type="number" min="1" />
+            <p class="hint">超過時從最久沒看的開始清除</p>
           </label>
         </div>
       </section>
