@@ -82,3 +82,27 @@ def test_settings_roundtrip(client):
     body = r.json()
     assert body["precache_enabled"] is True and body["precache_max_gb"] == 20
     assert body["hwaccel"] == "off"
+
+
+def test_run_requires_worker(client):
+    assert client.post("/api/precache/run").status_code == 503
+
+
+def test_run_enqueues_done_items(client, monkeypatch):
+    import asyncio
+
+    from sqlmodel import Session
+
+    from app import db
+    from app.models import MediaItem
+
+    with Session(db.get_engine()) as s:
+        for i, status in enumerate(("done", "done", "planned")):
+            s.add(MediaItem(source_path=f"/in/{i}.mkv", status=status))
+        s.commit()
+    monkeypatch.setattr(precache, "queue", asyncio.Queue())
+    monkeypatch.setattr(precache, "queued", set())
+    assert client.post("/api/precache/run").json() == {"added": 2}
+    assert client.post("/api/precache/run").json() == {"added": 0}
+    data = client.get("/api/precache/status").json()
+    assert data["queued"] == 2 and data["cached"] == 0

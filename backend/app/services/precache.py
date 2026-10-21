@@ -48,7 +48,7 @@ def touch(item_id: int) -> None:
         pass
 
 
-def _entries() -> list[tuple[float, int, int]]:
+def entries() -> list[tuple[float, int, int]]:
     rows = []
     for folder in cache_root().glob("*"):
         meta = folder / "meta.json"
@@ -61,7 +61,7 @@ def _entries() -> list[tuple[float, int, int]]:
 
 def evict(max_bytes: int, keep: int | None = None) -> int:
     """超過容量時，由最久沒看的開始清除。"""
-    rows = _entries()
+    rows = entries()
     total = sum(size for _, _, size in rows)
     removed = 0
     for _, item_id, size in rows:

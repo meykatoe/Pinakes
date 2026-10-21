@@ -293,6 +293,17 @@ export interface SyncStatus {
   last_failed: number
 }
 
+export interface PrecacheStatus {
+  queued: number
+  current: number | null
+  cached: number
+  bytes: number
+}
+
+export const getPrecacheStatus = () => send<PrecacheStatus>('/api/precache/status', 'GET')
+
+export const runPrecache = () => send<{ added: number }>('/api/precache/run', 'POST')
+
 export const getSyncStatus = () => send<SyncStatus>('/api/sync/status', 'GET')
 
 export const runSync = () =>

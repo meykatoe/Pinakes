@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import {
-  getSettings, getSyncStatus, getTranscodeStatus, rebuildNfo, runSync, saveSettings,
+  getPrecacheStatus, getSettings, getSyncStatus, getTranscodeStatus, rebuildNfo, runPrecache, runSync, saveSettings,
   testConnection,
-  type Settings, type SyncStatus,
+  type PrecacheStatus, type Settings, type SyncStatus,
 } from '../api'
 import { relativeTime } from '../format'
 import { toast, toastError } from '../ui/toast'
@@ -69,6 +69,35 @@ const GPU_NAMES: Record<string, string> = {
   qsv: 'Intel Quick Sync',
 }
 
+const cache = ref<PrecacheStatus | null>(null)
+const caching = ref(false)
+let cacheTimer: ReturnType<typeof setInterval> | undefined
+
+async function loadCache() {
+  cache.value = await getPrecacheStatus()
+  if (!cache.value.queued && cacheTimer) {
+    clearInterval(cacheTimer)
+    cacheTimer = undefined
+  }
+}
+
+async function cacheAll() {
+  caching.value = true
+  try {
+    if (dirty.value) await save()
+    const res = await runPrecache()
+    toast(res.added ? `已排入 ${res.added} 個項目` : '沒有需要新增的項目')
+    await loadCache()
+    if (cache.value?.queued) {
+      cacheTimer ??= setInterval(() => loadCache().catch(() => {}), 3000)
+    }
+  } catch (err) {
+    toastError(err)
+  } finally {
+    caching.value = false
+  }
+}
+
 const sync = ref<SyncStatus | null>(null)
 const syncing = ref(false)
 let timer: ReturnType<typeof setInterval> | undefined
@@ -87,6 +116,7 @@ onMounted(async () => {
     fill(await getSettings())
     if (props.section === 'sync') await loadSync()
     if (props.section === 'playback') {
+      loadCache().catch(() => undefined)
       getTranscodeStatus()
         .then((r) => (gpu.value = r.available ? r.hwaccel : undefined))
         .catch(() => undefined)
@@ -96,7 +126,10 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  clearInterval(cacheTimer)
+})
 
 async function syncNow() {
   if (dirty.value) await save()
@@ -477,6 +510,16 @@ async function test(target: Parameters<typeof testConnection>[0]) {
             <input v-model.number="form.precache_max_gb" class="input" type="number" min="1" />
             <p class="hint">超過時從最久沒看的開始清除</p>
           </label>
+          <div class="row test full">
+            <button type="button" class="btn sm" :disabled="caching" @click="cacheAll">
+              <span v-if="caching" class="spin"></span>
+              預轉碼所有已整理的檔案
+            </button>
+            <span v-if="cache" class="muted">
+              已快取 {{ cache.cached }} 個（{{ (cache.bytes / 1024 ** 3).toFixed(1) }} GB）
+              <template v-if="cache.queued">，等待處理 {{ cache.queued }} 個</template>
+            </span>
+          </div>
         </div>
       </section>
     </template>

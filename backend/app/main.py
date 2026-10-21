@@ -23,6 +23,9 @@ from app.api import (
     sync,
     watch,
 )
+from app.api import (
+    precache as precache_api,
+)
 from app.api import settings as settings_api
 from app.config import settings
 from app.db import get_engine, init_db
@@ -76,7 +79,7 @@ app.add_middleware(
 
 ROUTERS = (
     health, auth_api, settings_api, fs, library, rules, match, organize, watch, sync, media,
-    play, hls, subtitles,
+    play, hls, subtitles, precache_api,
 )
 for module in ROUTERS:
     app.include_router(module.router, prefix="/api")
