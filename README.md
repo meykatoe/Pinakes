@@ -18,21 +18,54 @@
 
 ## 快速開始（Docker）
 
-1. 準備資料夾。若要使用硬連結，下載目錄與媒體庫必須在同一個掛載點底下，例如：
+映像檔發佈在 GitHub Container Registry：`ghcr.io/meykatoe/pinakes`，支援 `linux/amd64` 與 `linux/arm64`。
 
-        /mnt/data/downloads   下載目錄
-        /mnt/data/media       媒體庫
+先準備資料夾。若要使用硬連結，下載目錄與媒體庫必須在同一個掛載點底下，例如：
 
-2. 修改 `docker-compose.yml` 中的 `/path/to/data` 為 `/mnt/data`，然後啟動：
+    /mnt/data/downloads   下載目錄
+    /mnt/data/media       媒體庫
 
-        mkdir -p config
-        docker compose up -d --build
+### 方式一：docker run
 
-3. 開啟 `http://伺服器IP:8000`，依引導填入 TMDB 金鑰，並選擇 `/data/downloads` 與 `/data/media`。
+    mkdir -p config
+    docker run -d --name pinakes --restart unless-stopped \
+      --user 1000:1000 -p 8000:8000 -e TZ=Asia/Taipei \
+      -v "$PWD/config:/config" -v /mnt/data:/data \
+      ghcr.io/meykatoe/pinakes:latest
+
+### 方式二：docker compose
+
+    mkdir pinakes && cd pinakes && mkdir config
+    curl -O https://raw.githubusercontent.com/meykatoe/Pinakes/main/docker-compose.yml
+    DATA_PATH=/mnt/data docker compose up -d
+
+`DATA_PATH` 是你的資料根目錄。也可以直接修改 `docker-compose.yml` 裡的 `/path/to/data`，之後就只要 `docker compose up -d`。
+
+### 開始使用
+
+開啟 `http://伺服器IP:8000`，依引導填入 TMDB 金鑰，並選擇 `/data/downloads` 與 `/data/media`。
 
 TMDB 金鑰可到 [TMDB 帳號設定](https://www.themoviedb.org/settings/api) 免費申請。
 
-容器以 UID/GID 1000 執行，可用環境變數 `PUID`、`PGID` 調整，確保對媒體目錄有讀寫權限。
+### 更新與版本
+
+    # docker compose
+    docker compose pull && docker compose up -d
+    # docker run
+    docker pull ghcr.io/meykatoe/pinakes:latest
+    docker rm -f pinakes   # 再重新執行上面的 docker run 指令
+
+設定與資料庫都在 `config` 資料夾，更新不會遺失。想固定版本可把 `latest` 改成指定版本，例如 `1.0.0`。
+
+### 注意事項
+
+- 容器以 UID/GID 1000 執行，可用 `PUID`、`PGID`（compose）或 `--user`（docker run）調整，確保對 `config` 與媒體目錄有讀寫權限。
+- Windows 的 Docker Desktop 無法對掛載的 Windows 資料夾建立硬連結，請把整理模式改成「複製」，或改用下方的 Windows 安裝程式。
+- 想自行建置映像檔：在專案根目錄執行 `docker compose up -d --build`（需先取消 `docker-compose.yml` 中 `build: .` 的註解）。
+
+## Windows 安裝程式
+
+到 [Releases](https://github.com/meykatoe/Pinakes/releases) 下載 `Pinakes-Setup.exe`，安裝後從開始選單啟動，右下角系統匣會出現圖示。已內附 Python 與 ffmpeg，不需另外安裝，資料存放在 `%APPDATA%\pinakes`。
 
 ## 手動安裝
 

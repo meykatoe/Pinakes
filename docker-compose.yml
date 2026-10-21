@@ -1,7 +1,8 @@
 services:
   pinakes:
-    build: .
-    image: pinakes:latest
+    image: ghcr.io/meykatoe/pinakes:latest
+    # 自行建置時取消註解
+    # build: .
     container_name: pinakes
     restart: unless-stopped
     # 檔案擁有者
@@ -13,6 +14,6 @@ services:
     volumes:
       - ./config:/config
       # 硬連結需同一掛載
-      - /path/to/data:/data
+      - ${DATA_PATH:-/path/to/data}:/data
       # rclone 掛載點，需要時取消註解
       # - /mnt/pikpak:/mnt/pikpak:ro,rslave
