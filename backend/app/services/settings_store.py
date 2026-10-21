@@ -14,6 +14,7 @@ DEFAULTS = {
     "tmdb_language": "zh-TW",
     "stream_token": "",
     "ffmpeg_path": "",
+    "hwaccel": "auto",
     "public_base_url": "",
     "smtp_host": "",
     "smtp_port": "587",

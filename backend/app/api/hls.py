@@ -1,3 +1,4 @@
+import asyncio
 import re
 import time
 from pathlib import Path
@@ -9,7 +10,7 @@ from sqlmodel import Session
 
 from app.api.play import base_url, playable_item, stream_url
 from app.db import get_session
-from app.services import player, transcode
+from app.services import hwaccel, player, settings_store, transcode
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ NAME = re.compile(r"^(?:index\.m3u8|seg_\d{5}\.ts)$")
 class StatusOut(BaseModel):
     available: bool
     ffmpeg: str | None
+    hwaccel: str | None = None
 
 
 class HlsIn(BaseModel):
@@ -34,9 +36,14 @@ class HlsOut(BaseModel):
 
 
 @router.get("/transcode/status")
-def status(session: Session = Depends(get_session)) -> StatusOut:
+async def status(session: Session = Depends(get_session)) -> StatusOut:
     found = transcode.find_binaries(session)
-    return StatusOut(available=found is not None, ffmpeg=found[0] if found else None)
+    if found is None:
+        return StatusOut(available=False, ffmpeg=None)
+    hw = await asyncio.to_thread(
+        hwaccel.detect, found[0], settings_store.get_value(session, "hwaccel")
+    )
+    return StatusOut(available=True, ffmpeg=found[0], hwaccel=hw)
 
 
 @router.post("/play/{item_id}/hls")
@@ -64,7 +71,8 @@ async def start_hls(
             )
             return HlsOut(mode=mode, duration=duration, direct_url=url)
         sess = await transcode.start_session(
-            ffmpeg, item_id, path, mode, audio_mode, start
+            ffmpeg, item_id, path, mode, audio_mode, start,
+            settings_store.get_value(session, "hwaccel"),
         )
     except transcode.TranscodeError as exc:
         raise HTTPException(502, str(exc)) from exc

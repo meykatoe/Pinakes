@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlmodel import Session
 
 from app.config import settings
-from app.services import settings_store
+from app.services import hwaccel, settings_store
 
 IDLE_SECONDS = 90
 DONE_IDLE_SECONDS = 1800
@@ -104,14 +104,19 @@ def decide(info: dict, suffix: str) -> tuple[str, str]:
 
 
 def build_command(
-    ffmpeg: str, path: Path, mode: str, audio_mode: str, start: float, out_dir: Path
+    ffmpeg: str, path: Path, mode: str, audio_mode: str, start: float, out_dir: Path,
+    hw: str | None = None,
 ) -> list[str]:
     cmd = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error"]
+    if hw and mode == "transcode":
+        cmd += hwaccel.pre_args(hw)
     if start > 0:
         cmd += ["-ss", f"{start:.3f}"]
     cmd += ["-i", str(path), "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn"]
     if mode == "remux":
         cmd += ["-c:v", "copy"]
+    elif hw:
+        cmd += hwaccel.video_args(hw)
     else:
         cmd += [
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
@@ -157,6 +162,7 @@ async def _wait_ready(sess: HlsSession) -> None:
 
 async def start_session(
     ffmpeg: str, item_id: int, path: Path, mode: str, audio_mode: str, start: float,
+    hw_pref: str = "off",
 ) -> HlsSession:
     for sess in sessions.values():
         same = sess.item_id == item_id and abs(sess.start - start) < 0.5
@@ -169,7 +175,8 @@ async def start_session(
     sid = secrets.token_urlsafe(16)
     out_dir = hls_root() / sid
     out_dir.mkdir(parents=True)
-    cmd = build_command(ffmpeg, path, mode, audio_mode, start, out_dir)
+    hw = await asyncio.to_thread(hwaccel.detect, ffmpeg, hw_pref)
+    cmd = build_command(ffmpeg, path, mode, audio_mode, start, out_dir, hw)
     log = open(out_dir / "ffmpeg.log", "wb")
     try:
         proc = await asyncio.create_subprocess_exec(
