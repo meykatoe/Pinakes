@@ -167,6 +167,12 @@ Pinakes 不負責連接雲端，請先自行用 rclone 掛載，例如：
     cd backend && uv run pytest
     cd frontend && npx vue-tsc -b
 
+### 分支與發佈
+
+- `dev`：開發與測試。推送到 `dev` 或對 `dev`、`main` 開 PR 時，會自動跑後端 ruff 與 pytest、前端建置，以及 Docker 映像建置驗證，不會發佈。
+- `main`：穩定版。確認 `dev` 沒問題後手動合併到 `main`，會先重跑測試，通過才把映像推到 GHCR（`latest` 與 `sha-<短雜湊>`）。
+- 打 `v*` 標籤時另外發佈版本映像（例如 `1.2.0`、`1.2`）。
+
 ## 名稱由來
 
 Pinakes（希臘語 Πίνακες，意為「板、目錄」）是 Pinax 的複數形。
