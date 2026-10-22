@@ -167,6 +167,16 @@ Pinakes 不負責連接雲端，請先自行用 rclone 掛載，例如：
     cd backend && uv run pytest
     cd frontend && npx vue-tsc -b && npm test
 
+### 版本號
+
+版本號以 `backend/pyproject.toml` 為準，用腳本同步其餘檔案（後端 `__init__.py`、`uv.lock`、前端 `package.json` 與鎖定檔）：
+
+    python scripts/version.py show
+    python scripts/version.py set 1.2.0
+    python scripts/version.py check
+
+後端測試會檢查版本是否一致，打 `v*` 標籤發佈時也會檢查標籤與版本號相同。
+
 ### 分支與發佈
 
 - `dev`：開發與測試。推送到 `dev` 或對 `dev`、`main` 開 PR 時，會自動跑後端 ruff 與 pytest、前端建置，以及 Docker 映像建置驗證，不會發佈。
