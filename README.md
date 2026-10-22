@@ -165,7 +165,7 @@ Pinakes 不負責連接雲端，請先自行用 rclone 掛載，例如：
 測試：
 
     cd backend && uv run pytest
-    cd frontend && npx vue-tsc -b
+    cd frontend && npx vue-tsc -b && npm test
 
 ### 分支與發佈
 
