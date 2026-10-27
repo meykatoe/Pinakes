@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
+  batchChooseItems,
   chooseItem,
   executeAll,
   executeItem,
@@ -47,6 +48,8 @@ const loading = ref(true)
 const scanning = ref(false)
 const working = ref(new Set<number>())
 const searching = ref<Item | null>(null)
+const selected = ref(new Set<number>())
+const batching = ref(false)
 let poll: number | undefined
 let searchTimer: number | undefined
 
@@ -59,6 +62,8 @@ async function reload() {
     getWatchStatus(),
   ])
   items.value = list
+  const ids = new Set(list.map((i) => i.id))
+  selected.value = new Set([...selected.value].filter((id) => ids.has(id)))
   summary.value = sum
   watchState.value = ws
 }
@@ -184,7 +189,45 @@ async function undo(item: Item) {
   if (ok) await act(item, () => undoItem(item.id), '已還原')
 }
 
+const selectable = computed(() => items.value.filter((i) => canChoose(i.status)))
+const selectedItems = computed(() => items.value.filter((i) => selected.value.has(i.id)))
+const allSelected = computed(
+  () => selectable.value.length > 0 && selectable.value.every((i) => selected.value.has(i.id)),
+)
+
+function toggle(id: number) {
+  const next = new Set(selected.value)
+  if (!next.delete(id)) next.add(id)
+  selected.value = next
+}
+
+function toggleAll() {
+  selected.value = allSelected.value ? new Set() : new Set(selectable.value.map((i) => i.id))
+}
+
+async function pickBatch(c: Candidate) {
+  const ids = selectedItems.value.map((i) => i.id)
+  searching.value = null
+  batching.value = true
+  try {
+    const r = await batchChooseItems(ids, { tmdb_id: c.tmdb_id, media_type: c.media_type })
+    const done = new Set(r.items.map((i) => i.id))
+    selected.value = new Set([...selected.value].filter((id) => !done.has(id)))
+    if (r.failures.length) toast(`已指定 ${r.items.length} 個，${r.failures.length} 個失敗：${r.failures[0].error}`, 'error')
+    else toast(`已將 ${r.items.length} 個項目指定為「${c.title}」`)
+    await reload()
+  } catch (err) {
+    toastError(err)
+  } finally {
+    batching.value = false
+  }
+}
+
 function pick(item: Item, c: Candidate) {
+  if (selectedItems.value.length > 1 && selected.value.has(item.id)) {
+    pickBatch(c)
+    return
+  }
   searching.value = null
   act(item, () => chooseItem(item.id, { tmdb_id: c.tmdb_id, media_type: c.media_type }), `已指定為「${c.title}」`)
 }
@@ -260,6 +303,21 @@ const canChoose = (s: string) => ['pending_review', 'planned', 'failed', 'undone
       <input v-model="query" type="search" class="input find" placeholder="搜尋檔名或片名" />
     </div>
 
+    <div v-if="selectable.length > 1 || selected.size" class="batch">
+      <label class="check">
+        <input type="checkbox" :checked="allSelected" @change="toggleAll" />
+        全選
+      </label>
+      <template v-if="selected.size">
+        <span class="muted">已選 {{ selected.size }} 個</span>
+        <button type="button" class="btn sm primary" :disabled="batching" @click="searching = selectedItems[0]">
+          <span v-if="batching" class="spin"></span>
+          批次指定作品
+        </button>
+        <button type="button" class="btn sm ghost" :disabled="batching" @click="selected = new Set()">取消選取</button>
+      </template>
+    </div>
+
     <div v-if="loading" class="list">
       <div v-for="n in 3" :key="n" class="item skeleton ph"></div>
     </div>
@@ -281,6 +339,14 @@ const canChoose = (s: string) => ['pending_review', 'planned', 'failed', 'undone
         :class="{ busy: working.has(i.id) }"
       >
         <div class="top">
+          <input
+            v-if="canChoose(i.status)"
+            type="checkbox"
+            class="pickbox"
+            :checked="selected.has(i.id)"
+            :aria-label="'選取 ' + basename(i.source_path)"
+            @change="toggle(i.id)"
+          />
           <span class="badge" :class="STATUS[i.status]?.tone">{{ STATUS[i.status]?.label ?? i.status }}</span>
           <span class="badge">{{ i.media_type === 'tv' ? '影集' : '電影' }}</span>
           <span v-if="i.method" class="badge">{{ METHOD[i.method] ?? i.method }}</span>
@@ -379,7 +445,7 @@ const canChoose = (s: string) => ['pending_review', 'planned', 'failed', 'undone
       </article>
     </TransitionGroup>
 
-    <SearchDialog v-if="searching" :item="searching" @close="searching = null" @pick="pick(searching!, $event)" />
+    <SearchDialog v-if="searching" :item="searching" :count="selected.has(searching.id) ? selected.size : 1" @close="searching = null" @pick="pick(searching!, $event)" />
   </section>
 </template>
 
@@ -512,6 +578,27 @@ const canChoose = (s: string) => ['pending_review', 'planned', 'failed', 'undone
   color: var(--danger);
   opacity: 1;
   font-weight: 700;
+}
+
+.batch {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.pickbox {
+  margin: 0 0.25rem 0 0;
+  cursor: pointer;
 }
 
 .find {

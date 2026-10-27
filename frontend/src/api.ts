@@ -276,6 +276,20 @@ export const chooseItem = (
   body: { tmdb_id?: number; category_id?: number; media_type?: string },
 ) => send<Item>(`/api/organize/items/${id}/choose`, 'POST', body)
 
+export interface BatchChooseResult {
+  items: Item[]
+  failures: { id: number; error: string }[]
+}
+
+export const batchChooseItems = (
+  ids: number[],
+  body: { tmdb_id?: number; category_id?: number; media_type?: string },
+) =>
+  send<BatchChooseResult>('/api/organize/items/batch-choose', 'POST', {
+    item_ids: ids,
+    ...body,
+  })
+
 export interface WatchStatus {
   enabled: boolean
   running: boolean

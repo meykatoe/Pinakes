@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { searchTmdb, type Candidate, type Item } from '../api'
 import { basename, posterThumb } from '../format'
 
-const props = defineProps<{ item: Item }>()
+const props = defineProps<{ item: Item; count?: number }>()
 const emit = defineEmits<{ close: []; pick: [c: Candidate] }>()
 
 const query = ref(props.item.title || guess(props.item.source_path))
@@ -55,7 +55,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <h3>指定作品</h3>
         <button type="button" class="btn ghost icon" aria-label="關閉" @click="emit('close')">✕</button>
       </div>
-      <p class="hint file break">{{ basename(item.source_path) }}</p>
+      <p v-if="count && count > 1" class="hint file">
+        將套用到已選取的 {{ count }} 個項目（各自保留季集）
+      </p>
+      <p v-else class="hint file break">{{ basename(item.source_path) }}</p>
       <form class="search" @submit.prevent="search">
         <div class="seg" role="radiogroup" aria-label="類型">
           <button
