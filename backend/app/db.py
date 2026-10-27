@@ -5,6 +5,7 @@ from functools import lru_cache
 from sqlalchemy import DateTime, Engine, event, inspect, text
 from sqlmodel import Session, SQLModel, col, create_engine, delete
 
+from app import migrations
 from app.config import settings
 from app.models import TmdbCache
 from app.services.categories import seed_categories
@@ -70,6 +71,8 @@ def migrate(engine: Engine) -> None:
 
 def init_db() -> None:
     engine = get_engine()
+    fresh = not inspect(engine).get_table_names()
+    migrations.upgrade(engine, fresh)
     SQLModel.metadata.create_all(engine)
     migrate(engine)
     with Session(engine) as session:
