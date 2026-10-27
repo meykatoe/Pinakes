@@ -346,3 +346,40 @@ def test_remove_media_undoes_all(client, env):
     assert res == {"removed": 1, "failed": 0}
     assert client.get("/api/library/media").json() == []
     assert client.delete("/api/library/media/movie/603").status_code == 404
+
+
+def test_batch_choose_same_series(client, env):
+    inbox, lib, _ = env
+    make(inbox, "Unknown.Show.S01E01.mkv")
+    make(inbox, "Unknown.Show.S01E02.mkv")
+    client.post("/api/organize/scan")
+    ids = [i["id"] for i in client.get("/api/organize/items").json()]
+    res = client.post(
+        "/api/organize/items/batch-choose",
+        json={"item_ids": ids, "tmdb_id": 1396, "media_type": "tv"},
+    ).json()
+    assert res["failures"] == []
+    assert len(res["items"]) == 2
+    assert {i["status"] for i in res["items"]} == {"planned"}
+    assert {i["episode"] for i in res["items"]} == {1, 2}
+    assert all(i["tmdb_id"] == 1396 for i in res["items"])
+
+
+def test_batch_choose_partial_failure(client, env):
+    inbox, _, _ = env
+    make(inbox, MATRIX)
+    client.post("/api/organize/scan")
+    item = client.get("/api/organize/items").json()[0]
+    done = client.post(f"/api/organize/items/{item['id']}/execute").json()
+    assert done["status"] == "done"
+    res = client.post(
+        "/api/organize/items/batch-choose",
+        json={"item_ids": [item["id"], 9999], "tmdb_id": 1396, "media_type": "tv"},
+    ).json()
+    assert res["items"] == []
+    assert {f["id"] for f in res["failures"]} == {item["id"], 9999}
+
+
+def test_batch_choose_empty_ids(client, env):
+    res = client.post("/api/organize/items/batch-choose", json={"item_ids": []})
+    assert res.status_code == 422

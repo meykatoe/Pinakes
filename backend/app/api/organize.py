@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, col, func, select
 
 from app.api.match import ai_client, tmdb_client
@@ -47,6 +47,20 @@ class ChooseIn(BaseModel):
     category_id: int | None = None
     # 修正類型
     media_type: Literal["movie", "tv"] | None = None
+
+
+class BatchChooseIn(ChooseIn):
+    item_ids: list[int] = Field(min_length=1, max_length=2000)
+
+
+class BatchFailure(BaseModel):
+    id: int
+    error: str
+
+
+class BatchChooseOut(BaseModel):
+    items: list[ItemOut]
+    failures: list[BatchFailure]
 
 
 class ProgressOut(BaseModel):
@@ -139,17 +153,19 @@ async def scan(
     )
 
 
-@router.post("/items/{item_id}/choose")
-async def choose(
-    item_id: int,
+CHOOSABLE = ("pending_review", "planned", "failed", "undone", "skipped")
+
+
+async def _apply_choice(
+    session: Session,
+    client: TmdbClient,
+    item: MediaItem,
     body: ChooseIn,
-    session: Session = Depends(get_session),
-    client: TmdbClient = Depends(tmdb_client),
-) -> ItemOut:
-    item = _get(session, item_id)
-    if item.status not in ("pending_review", "planned", "failed", "undone", "skipped"):
+    inbox: Path,
+    library: Path,
+) -> None:
+    if item.status not in CHOOSABLE:
         raise HTTPException(422, "此項目目前無法重新選擇")
-    inbox, library = _roots(session)
     media_type = body.media_type or item.media_type
     if body.category_id is not None:
         cat = session.get(Category, body.category_id)
@@ -176,7 +192,45 @@ async def choose(
         raise HTTPException(502, str(exc)) from exc
     except (organizer.OrganizeError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/items/{item_id}/choose")
+async def choose(
+    item_id: int,
+    body: ChooseIn,
+    session: Session = Depends(get_session),
+    client: TmdbClient = Depends(tmdb_client),
+) -> ItemOut:
+    item = _get(session, item_id)
+    inbox, library = _roots(session)
+    await _apply_choice(session, client, item, body, inbox, library)
     return _out(session, item)
+
+
+@router.post("/items/batch-choose")
+async def batch_choose(
+    body: BatchChooseIn,
+    session: Session = Depends(get_session),
+    client: TmdbClient = Depends(tmdb_client),
+) -> BatchChooseOut:
+    inbox, library = _roots(session)
+    one = ChooseIn(
+        tmdb_id=body.tmdb_id, category_id=body.category_id, media_type=body.media_type
+    )
+    out = BatchChooseOut(items=[], failures=[])
+    for item_id in dict.fromkeys(body.item_ids):
+        item = session.get(MediaItem, item_id)
+        if item is None:
+            out.failures.append(BatchFailure(id=item_id, error="項目不存在"))
+            continue
+        try:
+            await _apply_choice(session, client, item, one, inbox, library)
+        except HTTPException as exc:
+            session.rollback()
+            out.failures.append(BatchFailure(id=item_id, error=str(exc.detail)))
+            continue
+        out.items.append(_out(session, item))
+    return out
 
 
 @router.post("/items/{item_id}/skip")
