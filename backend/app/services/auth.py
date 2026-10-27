@@ -67,15 +67,34 @@ def is_authenticated(request: Request, stored: str) -> bool:
     return check_token(request.cookies.get(COOKIE, ""), stored)
 
 
-def throttled(ip: str, now: float | None = None) -> bool:
-    now = now if now is not None else time.time()
+def _recent(ip: str, now: float) -> list[float]:
     recent = [t for t in _fails.get(ip, []) if now - t < FAIL_WINDOW]
-    _fails[ip] = recent
-    return len(recent) >= MAX_FAILS
+    if recent:
+        _fails[ip] = recent
+    else:
+        _fails.pop(ip, None)
+    return recent
 
 
-def record_fail(ip: str) -> None:
-    _fails.setdefault(ip, []).append(time.time())
+def retry_after(ip: str, now: float | None = None) -> int:
+    now = now if now is not None else time.time()
+    recent = _recent(ip, now)
+    if len(recent) < MAX_FAILS:
+        return 0
+    # 第 MAX 次最舊的失敗過期即解鎖
+    return max(1, int(recent[-MAX_FAILS] + FAIL_WINDOW - now) + 1)
+
+
+def throttled(ip: str, now: float | None = None) -> bool:
+    return retry_after(ip, now) > 0
+
+
+def record_fail(ip: str, now: float | None = None) -> None:
+    now = now if now is not None else time.time()
+    # 順便清掉過期來源
+    for other in list(_fails):
+        _recent(other, now)
+    _fails.setdefault(ip, []).append(now)
 
 
 def clear_fails(ip: str) -> None:

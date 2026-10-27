@@ -38,6 +38,16 @@ def _client(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _check_throttle(ip: str) -> None:
+    wait = auth.retry_after(ip)
+    if wait:
+        raise HTTPException(
+            429,
+            f"嘗試次數過多，請 {-(-wait // 60)} 分鐘後再試",
+            headers={"Retry-After": str(wait)},
+        )
+
+
 @router.get("/status")
 def status(request: Request, session: Session = Depends(get_session)) -> StatusOut:
     stored = auth.stored_hash(session)
@@ -57,8 +67,7 @@ def login(
     if not stored:
         return StatusOut(enabled=False, authenticated=True)
     ip = _client(request)
-    if auth.throttled(ip):
-        raise HTTPException(429, "嘗試次數過多，請 5 分鐘後再試")
+    _check_throttle(ip)
     if not auth.verify_password(body.password, stored):
         auth.record_fail(ip)
         raise HTTPException(401, "密碼錯誤")
@@ -83,8 +92,12 @@ def change_password(
     if stored:
         if not auth.is_authenticated(request, stored):
             raise HTTPException(401, "請先登入")
+        ip = _client(request)
+        _check_throttle(ip)
         if not auth.verify_password(body.current, stored):
+            auth.record_fail(ip)
             raise HTTPException(422, "目前密碼錯誤")
+        auth.clear_fails(ip)
     if not body.new:
         settings_store.set_value(session, "auth_password", "")
         response.delete_cookie(auth.COOKIE)

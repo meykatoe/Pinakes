@@ -63,6 +63,61 @@ def test_throttle(client):
     assert res.status_code == 429
 
 
+def test_throttle_retry_after(client):
+    client.put("/api/auth/password", json={"new": "secret123"})
+    client.cookies.clear()
+    for _ in range(auth.MAX_FAILS):
+        client.post("/api/auth/login", json={"password": "bad"})
+    res = client.post("/api/auth/login", json={"password": "secret123"})
+    assert res.status_code == 429
+    assert 0 < int(res.headers["Retry-After"]) <= auth.FAIL_WINDOW
+
+
+def test_success_resets_fails(client):
+    client.put("/api/auth/password", json={"new": "secret123"})
+    client.cookies.clear()
+    for _ in range(auth.MAX_FAILS - 1):
+        client.post("/api/auth/login", json={"password": "bad"})
+    assert client.post("/api/auth/login", json={"password": "secret123"}).status_code == 200
+    for _ in range(auth.MAX_FAILS - 1):
+        client.post("/api/auth/login", json={"password": "bad"})
+    assert client.post("/api/auth/login", json={"password": "secret123"}).status_code == 200
+
+
+def test_unlock_after_window():
+    auth._fails.clear()
+    for _ in range(auth.MAX_FAILS):
+        auth.record_fail("1.2.3.4", now=1000)
+    assert auth.throttled("1.2.3.4", now=1001)
+    assert auth.retry_after("1.2.3.4", now=1001) == auth.FAIL_WINDOW
+    assert not auth.throttled("1.2.3.4", now=1000 + auth.FAIL_WINDOW)
+
+
+def test_throttle_is_per_ip():
+    auth._fails.clear()
+    for _ in range(auth.MAX_FAILS):
+        auth.record_fail("1.1.1.1", now=1000)
+    assert auth.throttled("1.1.1.1", now=1001)
+    assert not auth.throttled("2.2.2.2", now=1001)
+
+
+def test_stale_ips_pruned():
+    auth._fails.clear()
+    auth.record_fail("1.1.1.1", now=1000)
+    auth.record_fail("2.2.2.2", now=1000 + auth.FAIL_WINDOW + 1)
+    assert list(auth._fails) == ["2.2.2.2"]
+
+
+def test_change_password_throttled(client):
+    client.put("/api/auth/password", json={"new": "secret123"})
+    for _ in range(auth.MAX_FAILS):
+        res = client.put("/api/auth/password", json={"current": "bad", "new": "other123"})
+        assert res.status_code == 422
+    res = client.put("/api/auth/password", json={"current": "secret123", "new": "other123"})
+    assert res.status_code == 429
+    assert "Retry-After" in res.headers
+
+
 def test_token_expiry_and_tamper():
     stored = auth.hash_password("pw123456")
     token = auth.make_token(stored, now=1000)
