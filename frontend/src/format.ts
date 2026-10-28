@@ -9,6 +9,18 @@ export function episodeLabel(season: number | null, episode: number | null): str
   return `S${pad2(season)}E${pad2(episode)}`
 }
 
+export function episodeRanges(numbers: number[]): string {
+  const sorted = [...new Set(numbers)].sort((a, b) => a - b)
+  const parts: string[] = []
+  for (let i = 0; i < sorted.length; ) {
+    let j = i
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++
+    parts.push(j > i ? `${sorted[i]}–${sorted[j]}` : String(sorted[i]))
+    i = j + 1
+  }
+  return parts.join('、')
+}
+
 export function relativeTime(iso: string | number | null): string {
   if (iso === null) return ''
   const t = typeof iso === 'number' ? iso * 1000 : Date.parse(iso)

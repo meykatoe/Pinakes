@@ -1,5 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { basename, episodeLabel, pad2, posterThumb, relativeTime } from './format'
+import { basename, episodeLabel, episodeRanges, pad2, posterThumb, relativeTime } from './format'
+
+describe('episodeRanges', () => {
+  it('空清單回傳空字串', () => {
+    expect(episodeRanges([])).toBe('')
+  })
+
+  it('連續集數合併成範圍', () => {
+    expect(episodeRanges([2, 3, 4, 7, 9, 10])).toBe('2–4、7、9–10')
+  })
+
+  it('排序並去除重複', () => {
+    expect(episodeRanges([5, 3, 4, 3])).toBe('3–5')
+  })
+
+  it('單集不加範圍', () => {
+    expect(episodeRanges([6])).toBe('6')
+  })
+})
 
 describe('posterThumb', () => {
   it('無路徑回傳空字串', () => {

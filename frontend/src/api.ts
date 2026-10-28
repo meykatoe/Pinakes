@@ -369,6 +369,16 @@ export const listMedia = (q = '', sort = 'recent') =>
 export const getMedia = (type: string, id: number) =>
   send<MediaDetail>(`/api/library/media/${type}/${id}`, 'GET')
 
+export interface SeasonGap {
+  season: number
+  aired: number
+  owned: number
+  missing: { episode: number; name: string; air_date: string }[]
+}
+
+export const getMissingEpisodes = (id: number) =>
+  send<SeasonGap[]>(`/api/library/media/tv/${id}/missing`, 'GET')
+
 export const scrapeAll = () =>
   send<{ scraped: number }>('/api/library/scrape', 'POST')
 

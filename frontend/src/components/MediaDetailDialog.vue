@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   getMedia,
+  getMissingEpisodes,
   getPlayInfo,
   getTranscodeStatus,
   listPlayers,
@@ -10,8 +11,9 @@ import {
   type MediaDetail,
   type MediaEntry,
   type Player,
+  type SeasonGap,
 } from '../api'
-import { basename, pad2 } from '../format'
+import { basename, episodeRanges, pad2 } from '../format'
 import { copyText, formatTime, getProgress } from '../playback'
 import { confirm } from '../ui/confirm'
 import { toast, toastError } from '../ui/toast'
@@ -29,6 +31,7 @@ const canTranscode = ref(false)
 const playing = ref<FileRow | null>(null)
 const season = ref<number>(0)
 const refreshing = ref(false)
+const gaps = ref<SeasonGap[]>([])
 const progressTick = ref(0)
 const PLAYER_KEY = 'pinakes-player'
 
@@ -40,6 +43,17 @@ async function load() {
     }
   } catch (err) {
     toastError(err)
+  }
+  loadGaps()
+}
+
+async function loadGaps() {
+  if (props.entry.media_type !== 'tv') return
+  try {
+    gaps.value = await getMissingEpisodes(props.entry.tmdb_id)
+  } catch {
+    // 離線時略過
+    gaps.value = []
   }
 }
 
@@ -127,6 +141,11 @@ const seasons = computed(() => {
 const episodes = computed(() => seasons.value.find(([s]) => s === season.value)?.[1] ?? [])
 
 const isTv = computed(() => props.entry.media_type === 'tv')
+
+const gap = computed(() => gaps.value.find((g) => g.season === season.value && g.missing.length))
+const gapTitle = computed(() =>
+  (gap.value?.missing ?? []).map((m) => `${m.episode}　${m.name}（${m.air_date}）`).join('\n'),
+)
 
 function progressOf(f: FileRow) {
   void progressTick.value
@@ -286,6 +305,11 @@ const tmdbUrl = computed(
 
         <p v-if="!canTranscode" class="hint nofm">
           找不到 ffmpeg，內建播放器無法使用，將改用外部播放器。
+        </p>
+
+        <p v-if="gap" class="notice gap" :title="gapTitle">
+          缺 {{ gap.missing.length }} 集（已播出 {{ gap.aired }} 集，已有 {{ gap.owned }} 集）：第
+          {{ episodeRanges(gap.missing.map((m) => m.episode)) }} 集
         </p>
 
         <ul>
@@ -514,6 +538,10 @@ h2 {
   width: auto;
   min-height: 1.9rem;
   padding: 0 0.5rem;
+}
+
+.gap {
+  margin: 0 0 0.75rem;
 }
 
 .nofm {
