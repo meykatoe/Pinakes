@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -9,7 +10,7 @@ from sqlmodel import Session, select
 from app.api.match import tmdb_client
 from app.db import get_session
 from app.models import MediaItem, MediaMeta
-from app.services import organizer, scraper, settings_store
+from app.services import episodes, organizer, scraper, settings_store
 from app.services.tmdb import TmdbClient, TmdbError
 
 router = APIRouter()
@@ -137,6 +138,40 @@ def media_detail(
             for i in files
         ],
     )
+
+
+class MissingEpisode(BaseModel):
+    episode: int
+    name: str
+    air_date: str
+
+
+class SeasonGap(BaseModel):
+    season: int
+    aired: int
+    owned: int
+    missing: list[MissingEpisode]
+
+
+@router.get("/library/media/tv/{tmdb_id}/missing")
+async def missing_episodes(
+    tmdb_id: int,
+    session: Session = Depends(get_session),
+    client: TmdbClient = Depends(tmdb_client),
+) -> list[SeasonGap]:
+    items = _grouped(session).get(("tv", tmdb_id))
+    if not items:
+        raise HTTPException(404, "找不到這部作品")
+    owned = {
+        (i.season, i.episode)
+        for i in items
+        if i.season is not None and i.episode is not None
+    }
+    try:
+        gaps = await episodes.find_missing(client, tmdb_id, owned, date.today())
+    except TmdbError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return [SeasonGap(**g) for g in gaps]
 
 
 @router.post("/library/scrape")

@@ -96,6 +96,9 @@ class TmdbClient:
     async def episode(self, tv_id: int, season: int, episode: int) -> dict:
         return await self.get(f"/tv/{tv_id}/season/{season}/episode/{episode}")
 
+    async def season(self, tv_id: int, season: int) -> dict:
+        return await self.get(f"/tv/{tv_id}/season/{season}")
+
     async def details_full(self, media_type: str, tmdb_id: int) -> dict:
         kind = "tv" if media_type == "tv" else "movie"
         return await self.get(
