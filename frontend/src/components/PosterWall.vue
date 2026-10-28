@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
+  getItemRefs,
   listCategories,
   listMedia,
   scrapeAll,
   type Category,
   type MediaEntry,
 } from '../api'
+import { recentProgress } from '../playback'
+import { buildResume, type ResumeCard } from '../resume'
 import { go, route } from '../router'
 import { toast, toastError } from '../ui/toast'
 import MediaDetailDialog from './MediaDetailDialog.vue'
@@ -20,6 +23,7 @@ const kind = ref<'' | 'movie' | 'tv'>('')
 const category = ref<number | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
+const resume = ref<ResumeCard[]>([])
 let timer: number | undefined
 
 async function load() {
@@ -29,6 +33,22 @@ async function load() {
     toastError(err)
   } finally {
     loading.value = false
+  }
+  loadResume()
+}
+
+async function loadResume() {
+  const recent = recentProgress()
+  if (!recent.length) {
+    resume.value = []
+    return
+  }
+  try {
+    const refs = await getItemRefs(recent.map((r) => r.itemId))
+    resume.value = buildResume(recent, refs, entries.value)
+  } catch {
+    // 略過失敗
+    resume.value = []
   }
 }
 
@@ -62,6 +82,19 @@ const selected = computed(() => {
 
 const open = (e: MediaEntry) => go('wall', e.media_type, String(e.tmdb_id))
 const close = () => go('wall')
+
+const resumeItem = computed(() =>
+  route.value[3] === 'play' ? Number(route.value[4]) || null : null,
+)
+const openResume = (c: ResumeCard) =>
+  go('wall', c.entry.media_type, String(c.entry.tmdb_id), 'play', String(c.itemId))
+const resumed = () => {
+  if (selected.value) open(selected.value)
+}
+
+watch(selected, (now) => {
+  if (!now) loadResume()
+})
 
 const filtered = computed(() =>
   entries.value.filter(
@@ -188,6 +221,23 @@ function scroll(e: MouseEvent, dir: number) {
     <p v-else-if="!filtered.length" class="empty">找不到符合的作品</p>
 
     <template v-else-if="browsing">
+      <div v-if="resume.length" class="shelf">
+        <h2>繼續觀看 <small class="muted">{{ resume.length }}</small></h2>
+        <div class="strip-wrap">
+          <button type="button" class="nav prev" aria-label="向左" @click="scroll($event, -1)">‹</button>
+          <div class="strip">
+            <PosterCard
+              v-for="c in resume"
+              :key="c.itemId"
+              :entry="c.entry"
+              :progress="c.progress"
+              :note="c.note"
+              @select="openResume(c)"
+            />
+          </div>
+          <button type="button" class="nav next" aria-label="向右" @click="scroll($event, 1)">›</button>
+        </div>
+      </div>
       <div v-for="row in rows" :key="row.title" class="shelf">
         <h2>{{ row.title }} <small class="muted">{{ row.items.length }}</small></h2>
         <div class="strip-wrap">
@@ -218,6 +268,8 @@ function scroll(e: MouseEvent, dir: number) {
       v-if="selected"
       :key="selected.media_type + selected.tmdb_id"
       :entry="selected"
+      :resume-item="resumeItem"
+      @resumed="resumed"
       @close="close"
       @changed="load"
     />

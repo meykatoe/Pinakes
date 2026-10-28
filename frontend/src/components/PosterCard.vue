@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MediaEntry } from '../api'
 
-defineProps<{ entry: MediaEntry }>()
+defineProps<{ entry: MediaEntry; progress?: number; note?: string }>()
 defineEmits<{ select: [entry: MediaEntry] }>()
 </script>
 
@@ -12,10 +12,11 @@ defineEmits<{ select: [entry: MediaEntry] }>()
       <div v-else class="blank">{{ entry.title }}</div>
       <span v-if="entry.rating" class="rating">★ {{ entry.rating.toFixed(1) }}</span>
       <span v-if="entry.media_type === 'tv'" class="kind">{{ entry.file_count }} 集</span>
+      <div v-if="progress" class="prog"><div :style="{ width: progress + '%' }"></div></div>
     </div>
     <div class="meta">
       <strong>{{ entry.title }}</strong>
-      <span>{{ entry.year ?? '' }}</span>
+      <span>{{ note ?? entry.year ?? '' }}</span>
     </div>
   </button>
 </template>
@@ -78,6 +79,20 @@ img,
 
 .kind {
   right: 0.4rem;
+}
+
+.prog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.prog > div {
+  height: 100%;
+  background: var(--accent);
 }
 
 .poster:hover .frame,

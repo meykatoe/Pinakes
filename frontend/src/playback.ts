@@ -18,6 +18,17 @@ export function getProgress(itemId: number): Entry | null {
   return all()[itemId] ?? null
 }
 
+export interface RecentItem extends Entry {
+  itemId: number
+}
+
+export function recentProgress(limit = 30): RecentItem[] {
+  return Object.entries(all())
+    .map(([id, e]) => ({ itemId: Number(id), ...e }))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, limit)
+}
+
 export function saveProgress(itemId: number, pos: number, dur: number) {
   const data = all()
   if (dur > 0 && pos > dur - 90) delete data[itemId]

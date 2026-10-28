@@ -19,8 +19,8 @@ import { confirm } from '../ui/confirm'
 import { toast, toastError } from '../ui/toast'
 import VideoPlayer from './VideoPlayer.vue'
 
-const props = defineProps<{ entry: MediaEntry }>()
-const emit = defineEmits<{ close: []; changed: [] }>()
+const props = defineProps<{ entry: MediaEntry; resumeItem?: number | null }>()
+const emit = defineEmits<{ close: []; changed: []; resumed: [] }>()
 
 type FileRow = MediaDetail['files'][number]
 
@@ -35,6 +35,8 @@ const gaps = ref<SeasonGap[]>([])
 const progressTick = ref(0)
 const PLAYER_KEY = 'pinakes-player'
 
+let transcodeReady: Promise<unknown> = Promise.resolve()
+
 async function load() {
   try {
     detail.value = await getMedia(props.entry.media_type, props.entry.tmdb_id)
@@ -45,6 +47,17 @@ async function load() {
     toastError(err)
   }
   loadGaps()
+  await autoResume()
+}
+
+async function autoResume() {
+  const id = props.resumeItem
+  if (!id) return
+  emit('resumed')
+  const f = detail.value?.files.find((x) => x.item_id === id)
+  if (!f) return
+  await transcodeReady
+  play(f)
 }
 
 async function loadGaps() {
@@ -117,10 +130,10 @@ function play(f: FileRow) {
 
 onMounted(() => {
   document.body.style.overflow = 'hidden'
-  load()
-  getTranscodeStatus()
+  transcodeReady = getTranscodeStatus()
     .then((r) => (canTranscode.value = r.available))
     .catch(() => undefined)
+  load()
   loadPlayers().catch(toastError)
   window.addEventListener('keydown', onKey)
 })

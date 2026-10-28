@@ -369,6 +369,17 @@ export const listMedia = (q = '', sort = 'recent') =>
 export const getMedia = (type: string, id: number) =>
   send<MediaDetail>(`/api/library/media/${type}/${id}`, 'GET')
 
+export interface ItemRef {
+  item_id: number
+  media_type: string
+  tmdb_id: number
+  season: number | null
+  episode: number | null
+}
+
+export const getItemRefs = (ids: number[]) =>
+  send<ItemRef[]>(`/api/library/items?${ids.map((i) => `ids=${i}`).join('&')}`, 'GET')
+
 export interface SeasonGap {
   season: number
   aired: number
