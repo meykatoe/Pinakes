@@ -176,3 +176,30 @@ def test_meta_builder_defaults():
     meta = scraper.build_meta("movie", {"id": 5, "title": "T"})
     assert meta.genres == "[]" and meta.trailer_key == "" and meta.year is None
     assert json.loads(meta.credits) == []
+
+
+def test_item_refs(client):
+    a = add_item("tv", 1396, "絕命毒師", season=2, episode=5)
+    b = add_item()
+    with Session(db.get_engine()) as s:
+        gone = MediaItem(
+            source_path="/in/x.mkv", status="undone", media_type="movie",
+            tmdb_id=1, title="x", target_path="/lib/x.mkv",
+        )
+        s.add(gone)
+        s.commit()
+        gone_id = gone.id
+    res = client.get(f"/api/library/items?ids={a}&ids={b}&ids={gone_id}&ids=9999").json()
+    by_id = {r["item_id"]: r for r in res}
+    assert set(by_id) == {a, b}
+    assert by_id[a] == {
+        "item_id": a, "media_type": "tv", "tmdb_id": 1396, "season": 2, "episode": 5,
+    }
+    assert by_id[b]["media_type"] == "movie" and by_id[b]["season"] is None
+
+
+def test_item_refs_empty_and_limit(client):
+    assert client.get("/api/library/items").json() == []
+    many = "&".join(f"ids={n}" for n in range(101))
+    assert client.get(f"/api/library/items?{many}").status_code == 422
+    assert client.get("/api/library/items?ids=abc").status_code == 422

@@ -2,7 +2,7 @@ import json
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -151,6 +151,35 @@ class SeasonGap(BaseModel):
     aired: int
     owned: int
     missing: list[MissingEpisode]
+
+
+class ItemRef(BaseModel):
+    item_id: int
+    media_type: str
+    tmdb_id: int
+    season: int | None
+    episode: int | None
+
+
+@router.get("/library/items")
+def item_refs(
+    ids: list[int] = Query(default=[], max_length=100),
+    session: Session = Depends(get_session),
+) -> list[ItemRef]:
+    if not ids:
+        return []
+    stmt = select(MediaItem).where(
+        MediaItem.id.in_(ids),  # type: ignore[union-attr]
+        MediaItem.status == "done",
+        MediaItem.tmdb_id != None,  # noqa: E711
+    )
+    return [
+        ItemRef(
+            item_id=i.id, media_type=i.media_type, tmdb_id=i.tmdb_id,
+            season=i.season, episode=i.episode,
+        )
+        for i in session.exec(stmt)
+    ]
 
 
 @router.get("/library/media/tv/{tmdb_id}/missing")
